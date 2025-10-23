@@ -71,4 +71,4 @@ Command 'hello' not found.
 
 ## State of development
 
-Development is focused on version 1.0.0 in the `main` branch.
+Development is focused on version 1 in the `main` branch.
