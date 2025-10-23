@@ -1,4 +1,3 @@
-# ~/.bash/bash-local/main.bash
 # -----------------------------------------------------------------------------
 # This script implements bash-local.
 #
@@ -215,12 +214,13 @@ loadLocalEnv() {
 # environment, if so loads it.
 cd() {
     
-    local -r PREVIOUS_DIR="$PWD" 
+    local -r PREVIOUS_DIR="$PWD"
     
     builtin cd "$@" || return
 	
-	local -r BASH_ENV="$HOME/.bash/bash-local/bash-env"
-    local -r BASH_LOCAL_ENV="$HOME/.bash/bash-local/bash-local-env"
+	local -r SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")"
+	local -r BASH_ENV="$SCRIPT_DIR/bash-env"
+    local -r BASH_LOCAL_ENV="$SCRIPT_DIR/bash-local-env"
 	
 	# Restore stage
     if [[ -d "$PREVIOUS_DIR/.bash-local" ]]; then
