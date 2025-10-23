@@ -2,7 +2,7 @@
 
 bash-local is a way to maintain a unique environment (aliases, functions, and variables) for each directory in Linux. It coexists with the usual Bash environment.
 
-## Installation
+## Install
 
 1. **Clone the repository.** Run the following command in your terminal:
 
@@ -18,7 +18,7 @@ git clone https://github.com/lluisirago/bash-local.git
 
 This will enable `bash-local` automatically every time you start a new terminal session.
 
-## Usage
+## Use
 
 1. **Create a .bash-local directory.** In any directory where you want to use `bash-local`, execute:
 
