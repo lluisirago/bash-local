@@ -65,7 +65,7 @@ Command 'hello' not found.
 ~/dir$ hello
 world
 ~/dir$ cd
-~& hello
+~$ hello
 Command 'hello' not found.
 ```
 
