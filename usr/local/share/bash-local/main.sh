@@ -238,3 +238,5 @@ cd() {
     # Load stage
     [[ -d ".bash-local" ]] && loadLocalEnv "$BASH_LOCAL_ENV"
 }
+
+setEnvFiles "$(dirname "${BASH_SOURCE[0]}")/bash-env" "$(dirname "${BASH_SOURCE[0]}")/bash-local-env"
