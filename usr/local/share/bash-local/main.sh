@@ -208,21 +208,8 @@ loadLocalEnv() {
     unset file
 }
 
-# Override of the cd function.
-# Checks if the origin directory is a local environment, if so restores the
-# global one. Then, checks if the destination directory is a local
-# environment, if so loads it.
-cd() {
-    
-    local -r PREVIOUS_DIR="$PWD"
-    
-    builtin cd "$@" || return
-	
-	local -r SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")"
-	local -r BASH_ENV="$SCRIPT_DIR/bash-env"
-    local -r BASH_LOCAL_ENV="$SCRIPT_DIR/bash-local-env"
-	
-	# Restore stage
+old_unload() {
+
     if [[ -d "$PREVIOUS_DIR/.bash-local" ]]; then
         
         [[ -f "$BASH_ENV" ]] || resetEnv "$BASH_ENV"
@@ -234,9 +221,67 @@ cd() {
     
         setEnvFiles "$BASH_ENV" "$BASH_LOCAL_ENV"
     fi
+
+}
+################################################################################################################
+# v1.1.0
+
+resetCurrentEnvList() {
+
+    # VLOOKUP
     
-    # Load stage
-    [[ -d ".bash-local" ]] && loadLocalEnv "$BASH_LOCAL_ENV"
+    # Could be done faster using the path structure?
+    # If $PWD is contained in $PPD ($PWD == $PPD*) for example
+    return 0
+}
+
+unloadEnvs() {
+
+    local -rn OLD_ENVS=$1
+    
+    for env in "${OLD_ENVS[@]}"; do
+        unloadEnv $env
+    done
+    
+    return 0
+}
+
+unload() {
+    
+    cat "$CURRENT_ENV_LIST" > "$PREVIOUS_ENV_LIST"
+    resetCurrentEnvList "$CURRENT_ENV_LIST" #ToDo
+    
+    # Both files (ENV_LIST) OK up to this point
+    
+    local -a old_envs
+    # Quiero solo los que están en $PREVIOUS_ENV_LIST que no están en $CURRENT_ENV_LIST (usando '^< ')
+    mapfile -t old_envs < <(diff "$PREVIOUS_ENV_LIST" "$CURRENT_ENV_LIST" 2>/dev/null | grep '^< ')
+    
+    unloadEnvs old_envs #ToDo
+
+    return 0
+}
+
+bash_local() {
+
+    local -r PPD=$1
+    
+    [[ $PPD == $HOME* ]] && unload
+    [[ $PWD == $HOME* ]] && load
+    
+    return 0
+}
+
+# Override of the cd function.
+cd() {
+    
+    local -r PPD="$PWD" # Path Previous Directory
+    
+    builtin cd "$@" || return
+    
+    # bash-local "$PPD"
+    
+    return 0
 }
 
 setEnvFiles "$(dirname "${BASH_SOURCE[0]}")/bash-env" "$(dirname "${BASH_SOURCE[0]}")/bash-local-env"
