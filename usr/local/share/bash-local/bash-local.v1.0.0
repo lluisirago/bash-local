@@ -1,3 +1,4 @@
+# ~/.bash/bash-local/main.bash
 # -----------------------------------------------------------------------------
 # This script implements bash-local.
 #
@@ -187,15 +188,15 @@ restoreEnv() {
 
 # Loads the local environment and stores it in the bash-local-env file.
 # @param BASH_LOCAL_ENV Path to the bash-local-env file.
-# @pre .bash-local directory exists.
+# @pre .bl directory exists.
 loadLocalEnv() {
     
     local -r BASH_LOCAL_ENV=$1
     
-	local -r BASH_LOCAL_EXT=".bash-local"
+	local -r BASH_LOCAL_EXT=".bl"
 	local -r BASH_LOCAL_DIR="$PWD/$BASH_LOCAL_EXT"
 	
-	# Load all .bash-local files from BASH_LOCAL_DIR
+	# Load all .bl files from BASH_LOCAL_DIR
 	shopt -s globstar
 	for file in "$BASH_LOCAL_DIR"/**/*"$BASH_LOCAL_EXT"; do
 	    if [[ -r "$file" ]]; then
@@ -208,9 +209,21 @@ loadLocalEnv() {
     unset file
 }
 
-old_unload() {
-
-    if [[ -d "$PREVIOUS_DIR/.bash-local" ]]; then
+# Override of the cd function.
+# Checks if the origin directory is a local environment, if so restores the
+# global one. Then, checks if the destination directory is a local
+# environment, if so loads it.
+cd() {
+    
+    local -r PREVIOUS_DIR="$PWD" 
+    
+    builtin cd "$@" || return
+	
+	local -r BASH_ENV="$HOME/.bash/bash-local.v1/bash-env"
+    local -r BASH_LOCAL_ENV="$HOME/.bash/bash-local.v1/bash-local-env"
+	
+	# Restore stage
+    if [[ -d "$PREVIOUS_DIR/.bl" ]]; then
         
         [[ -f "$BASH_ENV" ]] || resetEnv "$BASH_ENV"
         [[ -f "$BASH_LOCAL_ENV" ]] || storeEnv "$BASH_LOCAL_ENV"
@@ -221,67 +234,9 @@ old_unload() {
     
         setEnvFiles "$BASH_ENV" "$BASH_LOCAL_ENV"
     fi
-
-}
-################################################################################################################
-# v1.1.0
-
-resetCurrentEnvList() {
-
-    # VLOOKUP
     
-    # Could be done faster using the path structure?
-    # If $PWD is contained in $PPD ($PWD == $PPD*) for example
-    return 0
+    # Load stage
+    [[ -d ".bl" ]] && loadLocalEnv "$BASH_LOCAL_ENV"
 }
 
-unloadEnvs() {
-
-    local -rn OLD_ENVS=$1
-    
-    for env in "${OLD_ENVS[@]}"; do
-        unloadEnv $env
-    done
-    
-    return 0
-}
-
-unload() {
-    
-    cat "$CURRENT_ENV_LIST" > "$PREVIOUS_ENV_LIST"
-    resetCurrentEnvList "$CURRENT_ENV_LIST" #ToDo
-    
-    # Both files (ENV_LIST) OK up to this point
-    
-    local -a old_envs
-    # Quiero solo los que están en $PREVIOUS_ENV_LIST que no están en $CURRENT_ENV_LIST (usando '^< ')
-    mapfile -t old_envs < <(diff "$PREVIOUS_ENV_LIST" "$CURRENT_ENV_LIST" 2>/dev/null | grep '^< ')
-    
-    unloadEnvs old_envs #ToDo
-
-    return 0
-}
-
-bash_local() {
-
-    local -r PPD=$1
-    
-    [[ $PPD == $HOME* ]] && unload
-    [[ $PWD == $HOME* ]] && load
-    
-    return 0
-}
-
-# Override of the cd function.
-cd() {
-    
-    local -r PPD="$PWD" # Path Previous Directory
-    
-    builtin cd "$@" || return
-    
-    # bash-local "$PPD"
-    
-    return 0
-}
-
-setEnvFiles "$(dirname "${BASH_SOURCE[0]}")/bash-env" "$(dirname "${BASH_SOURCE[0]}")/bash-local-env"
+setEnvFiles "$HOME/.bash/bash-local.v1/bash-env" "$HOME/.bash/bash-local.v1/bash-local-env"
