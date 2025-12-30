@@ -1,0 +1,118 @@
+# -----------------------------------------------------------------------------
+# This script implements bash-local.
+#
+# bash-local is a way to maintain a unique environment
+# (aliases, functions, and variables) for each directory.
+# It coexists with the usual Bash environment.
+# -----------------------------------------------------------------------------
+
+resetCurrentEnvList() {
+    
+    ## Clear the file if $PWD != $HOME* (because there will be no current environments outside $HOME)
+    
+    # VLOOKUP
+    
+    # Could be done faster using the path structure?
+    # If $PWD is contained in $PPD ($PWD == $PPD*) for example
+    return 0
+}
+
+unloadEnv() {
+
+    local -r env_=$1
+    local -a aliases functions variables
+
+    getEnv "$env_" aliases functions variables #ToDo
+    unsourceEnv aliases functions variables #ToDo
+
+    return 0
+}
+
+unloadEnvs() {
+
+    local -rn OLD_ENVS=$1
+    
+    for env_ in "${OLD_ENVS[@]}"; do
+        unloadEnv $env_
+    done
+    
+    return 0
+}
+
+unload() {
+    
+    cat "$CURRENT_ENV_LIST" > "$PREVIOUS_ENV_LIST" ## Pass these variables as parameters (it will be also used in load stage?)
+    
+    resetCurrentEnvList "$CURRENT_ENV_LIST" #ToDo
+    
+    # Both files (ENV_LIST) OK up to this point
+    
+    local -a old_envs
+    # Get those envs in $PREVIOUS_ENV_LIST not present in $CURRENT_ENV_LIST
+    mapfile -t old_envs < <(diff "$PREVIOUS_ENV_LIST" "$CURRENT_ENV_LIST" 2>/dev/null | grep '^< ')
+    
+    unloadEnvs old_envs
+
+    return 0
+}
+
+_bl_set_environment_files() {
+
+    local -r PPD=$1
+    local -r BL_PREVIOUS_ENVIRONMENTS=$2
+    local -r BL_CURRENT_ENVIRONMENTS=$3
+
+    ## 0,003s
+    # Update previous environments
+    if [[ $PPD == "$HOME"* && -r $BL_CURRENT_ENVIRONMENTS ]]; then
+        cat "$BL_CURRENT_ENVIRONMENTS" > "$BL_PREVIOUS_ENVIRONMENTS"
+    else
+        : > "$BL_PREVIOUS_ENVIRONMENTS"
+    fi
+
+    ## Between 0,000s and 0,001s
+    # Update current environments
+    : > "$BL_CURRENT_ENVIRONMENTS"
+
+    if [[ $PWD == "$HOME"* ]]; then
+        local dir=$PWD
+        while [[ $dir != "$HOME" ]]; do
+            [[ -d "$dir/.bl" ]] && printf '%s\n' "$dir" >> "$BL_CURRENT_ENVIRONMENTS"
+            # Remove the last segment of 'dir' (e.g. remove '/segment' from '$HOME/segment')
+            dir=${dir%/*}
+        done
+    fi
+
+    #echo "Previous: $(cat $BL_PREVIOUS_ENVIRONMENTS)"
+    #echo "Current: $(cat $BL_CURRENT_ENVIRONMENTS)"
+}
+
+
+_bl_() {
+
+    local -r PPD=$1
+    local -r BL_PREVIOUS_ENVIRONMENTS="$BL_TMP_DIR/previous_environments"
+    local -r BL_CURRENT_ENVIRONMENTS="$BL_TMP_DIR/current_environments"
+    
+    _bl_set_environment_files "$PPD" "$BL_PREVIOUS_ENVIRONMENTS" "$BL_CURRENT_ENVIRONMENTS"
+
+    #[[ $PPD == $HOME* ]] && _bl_unload
+    #[[ $PWD == $HOME* ]] && _bl_load
+    
+    return 0
+}
+
+# MARK: 'cd' hook
+cd() {
+    
+    local -r PPD="$PWD" # Path Previous Directory
+
+    builtin cd "$@" || return
+    _bl_ "$PPD"
+    
+    return 0
+}
+
+# MARK: New session
+BL_TMP_DIR="$(mktemp -d "/tmp/bash-local.$UID.$BASHPID.XXXXXX")"
+trap 'rm -rf "$BL_TMP_DIR"' EXIT
