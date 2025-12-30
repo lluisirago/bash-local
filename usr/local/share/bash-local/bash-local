@@ -58,43 +58,36 @@ unload() {
 
 _bl_set_environment_files() {
 
-    local -r PPD=$1
-    local -r BL_PREVIOUS_ENVIRONMENTS=$2
-    local -r BL_CURRENT_ENVIRONMENTS=$3
+    local -r PPD="$1"
 
-    ## 0,003s
-    # Update previous environments
-    if [[ $PPD == "$HOME"* && -r $BL_CURRENT_ENVIRONMENTS ]]; then
-        cat "$BL_CURRENT_ENVIRONMENTS" > "$BL_PREVIOUS_ENVIRONMENTS"
-    else
-        : > "$BL_PREVIOUS_ENVIRONMENTS"
-    fi
+    # Swap files. 'BL_PREVIOUS_ENVIRONMENTS' is set to 'BL_CURRENT_ENVIRONMENTS'
+    # in order to avoid external functions ('cp' or 'cat') and increase
+    # efficiency.
+    local -r AUX="$BL_PREVIOUS_ENVIRONMENTS"
+    BL_PREVIOUS_ENVIRONMENTS="$BL_CURRENT_ENVIRONMENTS"
+    BL_CURRENT_ENVIRONMENTS="$AUX"
 
-    ## Between 0,000s and 0,001s
     # Update current environments
     : > "$BL_CURRENT_ENVIRONMENTS"
-
     if [[ $PWD == "$HOME"* ]]; then
+
         local dir=$PWD
         while [[ $dir != "$HOME" ]]; do
+
             [[ -d "$dir/.bl" ]] && printf '%s\n' "$dir" >> "$BL_CURRENT_ENVIRONMENTS"
-            # Remove the last segment of 'dir' (e.g. remove '/segment' from '$HOME/segment')
+            # Remove the last segment of 'dir' (e.g. remove '/segment' from
+            # '$HOME/segment')
             dir=${dir%/*}
         done
     fi
-
-    #echo "Previous: $(cat $BL_PREVIOUS_ENVIRONMENTS)"
-    #echo "Current: $(cat $BL_CURRENT_ENVIRONMENTS)"
+    return 0
 }
-
 
 _bl_() {
 
     local -r PPD=$1
-    local -r BL_PREVIOUS_ENVIRONMENTS="$BL_TMP_DIR/previous_environments"
-    local -r BL_CURRENT_ENVIRONMENTS="$BL_TMP_DIR/current_environments"
     
-    _bl_set_environment_files "$PPD" "$BL_PREVIOUS_ENVIRONMENTS" "$BL_CURRENT_ENVIRONMENTS"
+    _bl_set_environment_files "$PPD"
 
     #[[ $PPD == $HOME* ]] && _bl_unload
     #[[ $PWD == $HOME* ]] && _bl_load
@@ -115,4 +108,8 @@ cd() {
 
 # MARK: New session
 BL_TMP_DIR="$(mktemp -d "/tmp/bash-local.$UID.$BASHPID.XXXXXX")"
+BL_PREVIOUS_ENVIRONMENTS="$BL_TMP_DIR/environments.alpha"
+BL_CURRENT_ENVIRONMENTS="$BL_TMP_DIR/environments.beta"
+: > "$BL_PREVIOUS_ENVIRONMENTS"
+: > "$BL_CURRENT_ENVIRONMENTS"
 trap 'rm -rf "$BL_TMP_DIR"' EXIT
