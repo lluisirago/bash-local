@@ -107,9 +107,9 @@ cd() {
 }
 
 # MARK: New session
-BL_TMP_DIR="$(mktemp -d "/tmp/bash-local.$UID.$BASHPID.XXXXXX")"
+BL_TMP_DIR="$(mktemp -d "/tmp/bl.$UID.$BASHPID.XXXXXX")"
 BL_PREVIOUS_ENVIRONMENTS="$BL_TMP_DIR/environments.alpha"
 BL_CURRENT_ENVIRONMENTS="$BL_TMP_DIR/environments.beta"
 : > "$BL_PREVIOUS_ENVIRONMENTS"
 : > "$BL_CURRENT_ENVIRONMENTS"
-trap 'rm -rf "$BL_TMP_DIR"' EXIT
+trap 'rm -rf "$BL_TMP_DIR"' EXIT SIGHUP
