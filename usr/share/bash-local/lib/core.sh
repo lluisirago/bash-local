@@ -20,6 +20,7 @@
 # 'old' and 'new' describe relative ones, representing environments to be
 # removed from or added to the current state when transitioning between
 # directories.
+# -----------------------------------------------------------------------------
 
 # @brief Calculates the current environments.
 # @description Does it by searching a '.bl' directory in PWD (Path Working
@@ -107,6 +108,7 @@ _bl_core_get_new_environments() {
 # @description Old environments are unloaded at every 'cd' execution (i.e.
 # all the elements from each old environment are removed).
 # Note that 'unload' refers to an enviroment and 'remove' to an element.
+# -----------------------------------------------------------------------------
 
 # @brief Gets all the elements from the old environments, filtered by kind.
 # @description A list of these elements is stored at the 'manifest' file located
@@ -222,12 +224,14 @@ _bl_core_unload_environments() {
 # @description New environments are loaded at every 'cd' execution (i.e.
 # all the elements from each new environment are added).
 # Note that 'load' refers to an enviroment and 'add' to an element.
+# -----------------------------------------------------------------------------
 
 #ToDo
 
 # MARK: Sync
 # -----------------------------------------------------------------------------
 # @section Environment synchronization
+# -----------------------------------------------------------------------------
 
 # @brief Reconciles the active environments with the current directory by
 # unloading exited environments and loading newly entered ones.
