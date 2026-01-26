@@ -1,152 +1,17 @@
 #!/bin/bash
 # -----------------------------------------------------------------------------
 # @file bash-local
-# @brief This script implements bash-local.
 #
+# @brief This script implements bash-local.
 # @description bash-local is a way to maintain a unique environment
 # (aliases, functions, and variables) for each directory.
 # It coexists with the usual Bash environment.
 # -----------------------------------------------------------------------------
 
-# MARK: Aux. functions
-
-# @section Auxiliar functions
-# @description Functions used for specific/minor tasks.
-
-# @brief Calculates the current evironments.
-# @description
-#   Does it by searching a '.bl' directory in 'PWD' parents and stores them in
-# '_bl_current_environments_file'.
-# @noargs
-# @see _bl_refresh_environments_files()
-_bl_refresh_current_environments_file() {
-
-    : > "$_bl_current_environments_file"
-    if [[ $PWD == "$HOME"* ]]; then
-
-        local dir=$PWD
-        while [[ $dir != "$HOME" ]]; do
-
-            [[ -d "$dir/.bl" ]] && printf '%s\n' "$dir" >> "$_bl_current_environments_file"
-            # Remove the last segment of 'dir' (e.g. remove '/segment' from '$HOME/segment')
-            dir=${dir%/*}
-        done
-    fi
-    return 0
-}
-
-# @brief Gets the previous environments which are not current.
-# @arg $1 string Reference to the old environments' array
-_bl_get_old_environments() {
-
-    local -n old_environments_=$1
-
-    # Get those in '_bl_previous_environments_file' not present in '_bl_current_environments_file'
-    mapfile -t old_environments_ < <(
-        diff "$_bl_previous_environments_file" "$_bl_current_environments_file" 2>/dev/null |
-        sed -n 's/^< //p'
-    )
-    return 0
-}
-
-# Gets the current environments which are not previous.
-# 'new_environments_' - Reference to the new environments' array
-_bl_get_new_environments() {
-
-    local -n new_environments_=$1
-
-    # Get those in '_bl_current_environments_file' not present in '_bl_previous_environments_file'
-    mapfile -t new_environments_ < <(
-        diff "$_bl_current_environments_file" "$_bl_previous_environments_file" 2>/dev/null |
-        sed -n 's/^< //p'
-    )
-    return 0
-}
-
-# MARK: Main functions
-
-# ToDo
-_bl_unsource_environments() {
-    
-    local -rn OLD_ENVIRONMENTS=$1
-
-    # For each env
-    for env in "${OLD_ENVIRONMENTS[@]}"; do
-
-        local -a aliases functions variables
-
-        # Extract aliases, functions and variables from '$env/.bl/manifest' file
-        # If 'PWD' == 'env' extract local and scoped
-        # If 'PWD' != 'env' only extract scoped
-        
-
-        # Unsource them
-        for alias in "${aliases[@]}"; do
-            unalias "$alias" 2>/dev/null
-        done
-
-        for function in "${FUNCTIONS[@]}"; do
-            unset -f "$function" 2>/dev/null
-        done
-
-        for variable in "${VARIABLES[@]}"; do
-            unset "$variable" 2>/dev/null
-        done
-    done
-
-    unset alias function variable
-    return 0
-}
-
-# @brief Updates the previous and current environments files.
-# @arg $1 string Path Previous Directory
-_bl_refresh_environments_files() {
-
-    local -r PPD="$1"
-
-    # Swap files
-    local -r AUX="$_bl_previous_environments_file"
-    _bl_previous_environments_file="$_bl_current_environments_file"
-    _bl_current_environments_file="$AUX"
-    
-    _bl_refresh_current_environments_file
-
-    return 0
-}
-
-# ToDo
-_bl_bash_local() {
-
-    local -r PPD=$1
-    
-    _bl_refresh_environments_files "$PPD"
-
-    if [[ $PPD == $HOME* ]]; then
-
-        local -a old_environments
-        _bl_get_old_environments old_environments
-        #_bl_unsource_environments old_environments
-    fi
-    #[[ $PWD == $HOME* ]] && _bl_source_environments
-    
-    return 0
-}
-
-# MARK: 'cd' hook
-cd() {
-    
-    local -r PPD="$PWD" # Path Previous Directory
-
-    builtin cd "$@" || return
-    _bl_bash_local "$PPD"
-    
-    return 0
-}
-
 # MARK: New session
-BL_TMP_DIR="$(mktemp -d "/tmp/bl.$UID.$BASHPID.XXXXXX")"
-_bl_previous_environments_file="$BL_TMP_DIR/environments.alpha"
-_bl_current_environments_file="$BL_TMP_DIR/environments.beta"
-: > "$_bl_previous_environments_file"
-: > "$_bl_current_environments_file"
-trap 'rm -rf "$BL_TMP_DIR"' EXIT SIGHUP
+_BL_STATE[TMP_DIR]="$(mktemp -d "/tmp/bl.$UID.$BASHPID.XXXXXX")"
+_BL_STATE[PREVIOUS_ENVIRONMENTS_FILE]="${_BL_STATE[TMP_DIR]}/environments.alpha"
+_BL_STATE[CURRENT_ENVIRONMENTS_FILE]="${_BL_STATE[TMP_DIR]}/environments.beta"
+: > "${_BL_STATE[PREVIOUS_ENVIRONMENTS_FILE]}"
+: > "${_BL_STATE[CURRENT_ENVIRONMENTS_FILE]}"
+trap 'rm -rf "${_BL_STATE[TMP_DIR]}"' EXIT SIGHUP
