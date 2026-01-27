@@ -11,14 +11,14 @@ users.
 
 ## Index
 
-* [_bl_core_refresh_current_environments_file](#blcorerefreshcurrentenvironmentsfile)
-* [_bl_core_refresh_environments_files](#blcorerefreshenvironmentsfiles)
-* [_bl_core_get_old_environments](#blcoregetoldenvironments)
-* [_bl_core_get_new_environments](#blcoregetnewenvironments)
-* [_bl_core_collect_elements](#blcorecollectelements)
-* [_bl_core_remove_elements](#blcoreremoveelements)
-* [_bl_core_unload_environments](#blcoreunloadenvironments)
-* [_bl_core_sync](#blcoresync)
+* [_bl_core_refresh_current_environments_file](#_bl_core_refresh_current_environments_file)
+* [_bl_core_refresh_environments_files](#_bl_core_refresh_environments_files)
+* [_bl_core_get_old_environments](#_bl_core_get_old_environments)
+* [_bl_core_get_new_environments](#_bl_core_get_new_environments)
+* [_bl_core_collect_elements](#_bl_core_collect_elements)
+* [_bl_core_remove_elements](#_bl_core_remove_elements)
+* [_bl_core_unload_environments](#_bl_core_unload_environments)
+* [_bl_core_sync](#_bl_core_sync)
 
 ## Environments' files
 

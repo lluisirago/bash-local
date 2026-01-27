@@ -218,8 +218,8 @@ cd() {
     
     builtin cd "$@" || return
 	
-	local -r BASH_ENV="$HOME/.bash/bash-local.v1.0.0/bash-env"
-    local -r BASH_LOCAL_ENV="$HOME/.bash/bash-local.v1.0.0/bash-local-env"
+	local -r BASH_ENV="$HOME/.bash/bash-local.v1.0.1/bash-env"
+    local -r BASH_LOCAL_ENV="$HOME/.bash/bash-local.v1.0.1/bash-local-env"
 	
 	# Restore stage
     if [[ -d "$PREVIOUS_DIR/.bl" ]]; then
@@ -238,4 +238,4 @@ cd() {
     [[ -d ".bl" ]] && loadLocalEnv "$BASH_LOCAL_ENV"
 }
 
-setEnvFiles "$HOME/.bash/bash-local.v1/bash-env" "$HOME/.bash/bash-local.v1.0.0/bash-local-env"
+setEnvFiles "$HOME/.bash/bash-local.v1.0.1/bash-env" "$HOME/.bash/bash-local.v1.0.1/bash-local-env"

@@ -8,6 +8,7 @@
 # users.
 # -----------------------------------------------------------------------------
 
+
 # MARK: Envs' files
 # -----------------------------------------------------------------------------
 # @section Environments' files
@@ -72,7 +73,7 @@ _bl_core_refresh_environments_files() {
 # @arg $1 array Reference to the old environments' array.
 # @see _bl_core_unload_environments()
 _bl_core_get_old_environments() {
-
+    
     local -n old_environments_=$1
 
     # Get those in '_BL_STATE[PREVIOUS_ENVIRONMENTS_FILE]' not present in
@@ -129,26 +130,28 @@ _bl_core_collect_elements() {
 
     for env in "${OLD_ENVIRONMENTS[@]}"; do
 
-        # Extract aliases, functions and variables from '$env/.bl/manifest' file
-        # If 'PWD' == 'env' extract local and scoped
-        # If 'PWD' != 'env' extract only scoped
+        # Decide if local elements must be removed
+        # If 'env' == 'PWD' collect local and scoped elements
+        # If 'env' != 'PWD' collect only scoped elements
         if [[ "$env" == "${_BL_STATE[PPD]}" ]]; then
             local is_env_root=true
         else
             local is_env_root=false
         fi
         
+        # Extract aliases, functions and variables from the manifest
         while IFS= read -r line; do
  
             [[ -z "$line" ]] && continue
-            echo "$line"
+            
+            # 'line' is a section header (e.g. [local.aliases])
             if [[ "$line" =~ ${_BL_CONST[SECTION_REGEX]} ]]; then
 
                 local section="${line:1:-1}"
                 local scope="${section%%.*}"
                 local kind="${section##*.}"
-                echo "Section set to $section"
 
+            # 'line' is an element
             elif [[ ("$scope" == "${_BL_CONST[SCOPE_LOCAL]}" && "$is_env_root" == true) ||
                      "$scope" == "${_BL_CONST[SCOPE_SCOPED]}" ]]; then
                 
@@ -157,13 +160,12 @@ _bl_core_collect_elements() {
                     "${_BL_CONST[KIND_FUNCTIONS]}") functions_+=("$line") ;;
                     "${_BL_CONST[KIND_VARIABLES]}") variables_+=("$line") ;;
                 esac
-                echo "$line added to $kind"
             fi
         done < "$env/.bl/manifest"
 
-        echo "Aliases: ${aliases_[@]}"
-        echo "Functions: ${functions_[@]}"
-        echo "Variables: ${variables_[@]}"
+        echo "Aliases: " "${aliases_[@]}"
+        echo "Functions: " "${functions_[@]}"
+        echo "Variables: " "${variables_[@]}"
     done
 
     unset env line
@@ -205,11 +207,11 @@ _bl_core_remove_elements() {
 # @noargs
 # @see _bl_core_sync()
 _bl_core_unload_environments() {
-
-    [[ $_BL_STATE[PPD] == $HOME* ]] || return
+    
+    [[ ${_BL_STATE[PPD]} == $HOME* ]] || return
 
     local -a old_environments aliases functions variables
-
+    
     _bl_core_get_old_environments old_environments
     _bl_core_collect_elements old_environments aliases functions variables
     _bl_core_remove_elements aliases functions variables
@@ -227,6 +229,7 @@ _bl_core_unload_environments() {
 # -----------------------------------------------------------------------------
 
 #ToDo
+
 
 # MARK: Sync
 # -----------------------------------------------------------------------------

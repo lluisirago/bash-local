@@ -7,6 +7,8 @@
 # for bash-local synchronization.
 # -----------------------------------------------------------------------------
 
+# @brief Redefinition of 'cd' function
+# @see cd --help
 cd() {
     
     _BL_STATE[PPD]="$PWD"
