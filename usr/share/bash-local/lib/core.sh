@@ -6,27 +6,25 @@
 # @description Contains all the functions needed to synchronize the bash-local
 # environments with the current directory. Not intended to be called directly
 # by users.
-# -----------------------------------------------------------------------------
 
 
-# MARK: Envs' arrays
+# MARK: Envs
 # -----------------------------------------------------------------------------
-# @section Environments' arrays
-# @description Environments' arrays are used to store the current and previous
-# environments between `cd` executions. They are located in
-# `_BL_STATE_CURRENT_ENVIRONMENTS` and `_BL_STATE_PREVIOUS_ENVIRONMENTS`
-# and must be refreshed on each execution.
-# Note that *current* and *previous* describe the full environments active at a
+# @section Environments
+# @description Environments' arrays must be refreshed on each execution.
+# 
+# Note that *current* and *previous* describe the active environments at a
 # given directory state and *old* and *new* represent environments to be
-# removed from or added to the current state when transitioning between
-# directories.
-# -----------------------------------------------------------------------------
+# removed from or added to the current state.
+#
+# Also note that *unload* or *load* refers to an enviroment and *remove* or
+# *add* to an element.
 
 # @description Calculates the current environments.
+#
 # Does it by searching a `.bl` directory in PWD (Path Working Directory)
 # parents and storing them in `_BL_STATE_CURRENT_ENVIRONMENTS`. The function
-# does nothing but clear the array if the PWD (Path Working Directory) is not
-# inside the HOME directory.
+# does nothing but clear the array if the PWD is not inside the HOME directory.
 #
 # @noargs
 # @see Used in [_bl_core_refresh_environments](#_bl_core_refresh_environments)
@@ -92,26 +90,25 @@ _bl_core_get_new_environments() {
 
     local -n new_environments_=$1
 
-    # Get those in `_BL_STATE[CURRENT_ENVIRONMENTS_FILE]` not present in
-    # `_BL_STATE[PREVIOUS_ENVIRONMENTS_FILE]`
-    mapfile -t new_environments_ < <(
-        diff "${_BL_STATE[CURRENT_ENVIRONMENTS_FILE]}" "${_BL_STATE[PREVIOUS_ENVIRONMENTS_FILE]}" 2>/dev/null |
-        sed -n 's/^< //p'
-    )
+    local -A previous_environments=()
+    local environment
+
+    # Load the previous environments into the map
+    for environment in "${_BL_STATE_PREVIOUS_ENVIRONMENTS[@]}"; do
+        previous_environments["$environment"]=1
+    done
+
+    # Get the current environments not in the map
+    for environment in "${_BL_STATE_CURRENT_ENVIRONMENTS[@]}"; do
+        [[ ${previous_environments["$environment"]+x} ]] || new_environments_+=("$environment")
+    done
+
     return 0
 }
 
-
-# MARK: Unload
-# -----------------------------------------------------------------------------
-# @section Unload stage
-# @description Old environments are unloaded at every `cd` execution (i.e.
-# all the elements from each old environment are removed).
-# Note that *unload* refers to an enviroment and *remove* to an element.
-# -----------------------------------------------------------------------------
-
 # @description Gets all the elements from the old environments, filtered by
 # kind.
+#
 # A list of these elements is stored at the `manifest` file located inside each
 # environment's `.bl` directory. This function reads the manifests in order to
 # get the aliases, functions and variables.
@@ -172,6 +169,13 @@ _bl_core_collect_elements() {
     return 0
 }
 
+
+# MARK: Unload
+# -----------------------------------------------------------------------------
+# @section Unload stage
+# @description Old environments are unloaded at every `cd` execution (i.e.
+# all the elements from each old environment are removed).
+
 # @description Removes the given elements.
 #
 # @arg $1 array Constant reference to the aliases' array.
@@ -184,26 +188,28 @@ _bl_core_remove_elements() {
     local -rn FUNCTIONS=$2
     local -rn VARIABLES=$3
 
-    for alias in "${ALIASES[@]}"; do
-        unalias "$alias" 2>/dev/null
+    local element
+
+    for element in "${ALIASES[@]}"; do
+        unalias "$element" 2>/dev/null
     done
 
-    for function in "${FUNCTIONS[@]}"; do
-        unset -f "$function" 2>/dev/null
+    for element in "${FUNCTIONS[@]}"; do
+        unset -f "$element" 2>/dev/null
     done
 
-    for variable in "${VARIABLES[@]}"; do
-        unset "$variable" 2>/dev/null
+    for element in "${VARIABLES[@]}"; do
+        unset "$element" 2>/dev/null
     done
 
-    unset alias function variable
     return 0
 }
 
-# @description Unloads the old environments (i.e, those exited at the `cd`
+# @description Unloads the old environments (i.e. those exited at the `cd`
 # execution).
-# The function does nothing if the PPD (Path Previous Directory) is not inside
-# the HOME directory.
+#
+# The function does nothing if the `PPD` (Path Previous Directory) is not inside
+# the `HOME` directory.
 #
 # @noargs
 # @see Used in [_bl_core_sync](#_bl_core_sync)
@@ -214,8 +220,8 @@ _bl_core_unload_environments() {
     local -a old_environments aliases functions variables
     
     _bl_core_get_old_environments old_environments
-    #_bl_core_collect_elements old_environments aliases functions variables
-    #_bl_core_remove_elements aliases functions variables
+    _bl_core_collect_elements old_environments aliases functions variables
+    _bl_core_remove_elements aliases functions variables
 
     return 0
 }
@@ -226,22 +232,37 @@ _bl_core_unload_environments() {
 # @section Load stage
 # @description New environments are loaded at every `cd` execution (i.e.
 # all the elements from each new environment are added).
-# Note that *load* refers to an enviroment and *add* to an element.
-# -----------------------------------------------------------------------------
 
 #ToDo
 
 
+_bl_core_add_elements() {
+
+    return 0
+}
+
+_bl_core_load_environments() {
+
+    [[ $PWD == $HOME* ]] || return
+
+    local -a new_environments aliases functions variables
+    
+    _bl_core_get_new_environments new_environments
+    _bl_core_collect_elements new_environments aliases functions variables
+    _bl_core_add_elements aliases functions variables
+
+    return 0
+}
+
 # MARK: Sync
 # -----------------------------------------------------------------------------
 # @section Environment synchronization
-# -----------------------------------------------------------------------------
 
 # @description Reconciles the active environments with the current directory by
 # unloading exited environments and loading newly entered ones.
 #
 # @noargs
-# @see Used in [hook.sh](./hook.sh#cd)
+# @see Used in [hook.md](./hook.sh#cd)
 _bl_core_sync() {
 
     _bl_core_refresh_environments

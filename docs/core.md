@@ -27,15 +27,16 @@ Note that *current* and *previous* describe the active environments at a
 given directory state and *old* and *new* represent environments to be
 removed from or added to the current state.
 
-Also note that *unload* refers to an enviroment and *remove* to an element.
+Also note that *unload* or *load* refers to an enviroment and *remove* or
+*add* to an element.
 
 ### _bl_core_refresh_current_environments
 
 Calculates the current environments.
+
 Does it by searching a `.bl` directory in PWD (Path Working Directory)
 parents and storing them in `_BL_STATE_CURRENT_ENVIRONMENTS`. The function
-does nothing but clear the array if the PWD (Path Working Directory) is not
-inside the HOME directory.
+does nothing but clear the array if the PWD is not inside the HOME directory.
 
 _Function has no arguments._
 
@@ -82,6 +83,7 @@ Gets the current environments which are not previous.
 
 Gets all the elements from the old environments, filtered by
 kind.
+
 A list of these elements is stored at the `manifest` file located inside each
 environment's `.bl` directory. This function reads the manifests in order to
 get the aliases, functions and variables.
@@ -120,6 +122,7 @@ Removes the given elements.
 
 Unloads the old environments (i.e. those exited at the `cd`
 execution).
+
 The function does nothing if the `PPD` (Path Previous Directory) is not inside
 the `HOME` directory.
 
@@ -133,8 +136,6 @@ _Function has no arguments._
 
 New environments are loaded at every `cd` execution (i.e.
 all the elements from each new environment are added).
-Note that *load* refers to an enviroment and *add* to an element.
------------------------------------------------------------------------------
 
 ### _bl_core_sync
 
