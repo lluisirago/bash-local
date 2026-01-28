@@ -27,6 +27,7 @@ fi
 declare -gA _BL_STATE=(
     [PPD]=""
     [TMP_DIR]=""
-    [PREVIOUS_ENVIRONMENTS_FILE]=""
-    [CURRENT_ENVIRONMENTS_FILE]=""
 )
+
+declare -ga _BL_STATE_PREVIOUS_ENVIRONMENTS=()
+declare -ga _BL_STATE_CURRENT_ENVIRONMENTS=()

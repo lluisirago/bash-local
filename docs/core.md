@@ -1,55 +1,55 @@
 # core.sh
 
-Reconciles the active environments with the current directory by
+Internal core API.
 
 ## Overview
 
 Contains all the functions needed to synchronize the bash-local
-environments with the current directory. Not intended to be called directly by
-users.
+environments with the current directory. Not intended to be called directly
+by users.
 -----------------------------------------------------------------------------
 
 ## Index
 
-* [_bl_core_refresh_current_environments_file](#_bl_core_refresh_current_environments_file)
-* [_bl_core_refresh_environments_files](#_bl_core_refresh_environments_files)
-* [_bl_core_get_old_environments](#_bl_core_get_old_environments)
-* [_bl_core_get_new_environments](#_bl_core_get_new_environments)
-* [_bl_core_collect_elements](#_bl_core_collect_elements)
-* [_bl_core_remove_elements](#_bl_core_remove_elements)
-* [_bl_core_unload_environments](#_bl_core_unload_environments)
-* [_bl_core_sync](#_bl_core_sync)
+* [_bl_core_refresh_current_environments](#blcorerefreshcurrentenvironments)
+* [_bl_core_refresh_environments](#blcorerefreshenvironments)
+* [_bl_core_get_old_environments](#blcoregetoldenvironments)
+* [_bl_core_get_new_environments](#blcoregetnewenvironments)
+* [_bl_core_collect_elements](#blcorecollectelements)
+* [_bl_core_remove_elements](#blcoreremoveelements)
+* [_bl_core_unload_environments](#blcoreunloadenvironments)
+* [_bl_core_sync](#blcoresync)
 
-## Environments' files
+## Environments' arrays
 
-Environments' files are used to store the current and previous
-environments between 'cd' executions. They are located in '_BL_STATE[TMP_DIR]'
+Environments' arrays are used to store the current and previous
+environments between `cd` executions. They are located in
+`_BL_STATE_CURRENT_ENVIRONMENTS` and `_BL_STATE_PREVIOUS_ENVIRONMENTS`
 and must be refreshed on each execution.
-
-Note that 'current' and 'previous' describe absolute environment sets
-(i.e. the full environments active at a given directory state) and
-'old' and 'new' describe relative ones, representing environments to be
+Note that 'current' and 'previous' describe the full environments active at a
+given directory state and 'old' and 'new' represent environments to be
 removed from or added to the current state when transitioning between
 directories.
 -----------------------------------------------------------------------------
 
-### _bl_core_refresh_current_environments_file
+### _bl_core_refresh_current_environments
 
-Does it by searching a '.bl' directory in PWD (Path Working
-Directory) parents and storing them in the CURRENT_ENVIRONMENTS_FILE. The
-function does nothing but clear the file if the PWD (Path Working Directory)
+Calculates the current environments.
+Does it by searching a `.bl` directory in PWD (Path Working
+Directory) parents and storing them in `_BL_STATE_CURRENT_ENVIRONMENTS`. The
+function does nothing but clear the array if the PWD (Path Working Directory)
 is not inside the HOME directory.
 
 _Function has no arguments._
 
 #### See also
 
-* [_bl_core_refresh_environments_files()](#blcorerefreshenvironmentsfiles)
+* Used in [_bl_core_refresh_environments](#_bl_core_refresh_environments)
 
-### _bl_core_refresh_environments_files
+### _bl_core_refresh_environments
 
-Sets the current environments as previous by swapping the files'
-variables and calculates the current ones.
+Updates the previous and current environments' arrays.
+Sets the current environments as previous and calculates the current ones.
 
 _Function has no arguments._
 
@@ -58,6 +58,8 @@ _Function has no arguments._
 * [_bl_core_sync()](#blcoresync)
 
 ### _bl_core_get_old_environments
+
+Gets the previous environments which are not current.
 
 #### Arguments
 
@@ -68,6 +70,8 @@ _Function has no arguments._
 * [_bl_core_unload_environments()](#blcoreunloadenvironments)
 
 ### _bl_core_get_new_environments
+
+Gets the current environments which are not previous.
 
 #### Arguments
 
@@ -86,6 +90,8 @@ Note that 'unload' refers to an enviroment and 'remove' to an element.
 
 ### _bl_core_collect_elements
 
+Gets all the elements from the old environments, filtered by
+kind.
 A list of these elements is stored at the 'manifest' file located
 inside each environment's '.bl' directory. This function reads the manifests
 in order to get the aliases, functions and variables.
@@ -103,6 +109,8 @@ in order to get the aliases, functions and variables.
 
 ### _bl_core_remove_elements
 
+Removes the given elements.
+
 #### Arguments
 
 * **$1** (array): Constant reference to the aliases' array.
@@ -115,6 +123,8 @@ in order to get the aliases, functions and variables.
 
 ### _bl_core_unload_environments
 
+Unloads the old environments (i.e, those exited at the 'cd'
+execution).
 The function does nothing if the PPD (Path Previous Directory) is
 not inside the HOME directory.
 
@@ -132,6 +142,9 @@ Note that 'load' refers to an enviroment and 'add' to an element.
 -----------------------------------------------------------------------------
 
 ### _bl_core_sync
+
+Reconciles the active environments with the current directory by
+unloading exited environments and loading newly entered ones.
 
 _Function has no arguments._
 
