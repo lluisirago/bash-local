@@ -26,8 +26,8 @@ Environments' arrays are used to store the current and previous
 environments between `cd` executions. They are located in
 `_BL_STATE_CURRENT_ENVIRONMENTS` and `_BL_STATE_PREVIOUS_ENVIRONMENTS`
 and must be refreshed on each execution.
-Note that 'current' and 'previous' describe the full environments active at a
-given directory state and 'old' and 'new' represent environments to be
+Note that *current* and *previous* describe the full environments active at a
+given directory state and *old* and *new* represent environments to be
 removed from or added to the current state when transitioning between
 directories.
 -----------------------------------------------------------------------------
@@ -35,10 +35,10 @@ directories.
 ### _bl_core_refresh_current_environments
 
 Calculates the current environments.
-Does it by searching a `.bl` directory in PWD (Path Working
-Directory) parents and storing them in `_BL_STATE_CURRENT_ENVIRONMENTS`. The
-function does nothing but clear the array if the PWD (Path Working Directory)
-is not inside the HOME directory.
+Does it by searching a `.bl` directory in PWD (Path Working Directory)
+parents and storing them in `_BL_STATE_CURRENT_ENVIRONMENTS`. The function
+does nothing but clear the array if the PWD (Path Working Directory) is not
+inside the HOME directory.
 
 _Function has no arguments._
 
@@ -55,7 +55,7 @@ _Function has no arguments._
 
 #### See also
 
-* [_bl_core_sync()](#blcoresync)
+* Used in [_bl_core_sync](#_bl_core_sync)
 
 ### _bl_core_get_old_environments
 
@@ -67,7 +67,7 @@ Gets the previous environments which are not current.
 
 #### See also
 
-* [_bl_core_unload_environments()](#blcoreunloadenvironments)
+* Used in [_bl_core_unload_environments](#_bl_core_unload_environments)
 
 ### _bl_core_get_new_environments
 
@@ -79,22 +79,22 @@ Gets the current environments which are not previous.
 
 #### See also
 
-* [_bl_core_load_environments()](#blcoreloadenvironments)
+* Used in [_bl_core_load_environments](#_bl_core_load_environments)
 
 ## Unload stage
 
-Old environments are unloaded at every 'cd' execution (i.e.
+Old environments are unloaded at every `cd` execution (i.e.
 all the elements from each old environment are removed).
-Note that 'unload' refers to an enviroment and 'remove' to an element.
+Note that *unload* refers to an enviroment and *remove* to an element.
 -----------------------------------------------------------------------------
 
 ### _bl_core_collect_elements
 
 Gets all the elements from the old environments, filtered by
 kind.
-A list of these elements is stored at the 'manifest' file located
-inside each environment's '.bl' directory. This function reads the manifests
-in order to get the aliases, functions and variables.
+A list of these elements is stored at the `manifest` file located inside each
+environment's `.bl` directory. This function reads the manifests in order to
+get the aliases, functions and variables.
 
 #### Arguments
 
@@ -105,7 +105,7 @@ in order to get the aliases, functions and variables.
 
 #### See also
 
-* [_bl_core_unload_environments()](#blcoreunloadenvironments)
+* Used in [_bl_core_unload_environments](#_bl_core_unload_environments)
 
 ### _bl_core_remove_elements
 
@@ -119,26 +119,26 @@ Removes the given elements.
 
 #### See also
 
-* [_bl_core_unload_environments()](#blcoreunloadenvironments)
+* Used in [_bl_core_unload_environments](#_bl_core_unload_environments)
 
 ### _bl_core_unload_environments
 
-Unloads the old environments (i.e, those exited at the 'cd'
+Unloads the old environments (i.e, those exited at the `cd`
 execution).
-The function does nothing if the PPD (Path Previous Directory) is
-not inside the HOME directory.
+The function does nothing if the PPD (Path Previous Directory) is not inside
+the HOME directory.
 
 _Function has no arguments._
 
 #### See also
 
-* [_bl_core_sync()](#blcoresync)
+* Used in [_bl_core_sync](#_bl_core_sync)
 
 ## Environment synchronization
 
-New environments are loaded at every 'cd' execution (i.e.
+New environments are loaded at every `cd` execution (i.e.
 all the elements from each new environment are added).
-Note that 'load' refers to an enviroment and 'add' to an element.
+Note that *load* refers to an enviroment and *add* to an element.
 -----------------------------------------------------------------------------
 
 ### _bl_core_sync
@@ -150,5 +150,5 @@ _Function has no arguments._
 
 #### See also
 
-* [hook.sh](#hooksh)
+* Used in [hook.sh](./hook.sh#cd)
 
