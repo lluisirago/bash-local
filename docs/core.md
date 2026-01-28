@@ -7,7 +7,6 @@ Internal core API.
 Contains all the functions needed to synchronize the bash-local
 environments with the current directory. Not intended to be called directly
 by users.
------------------------------------------------------------------------------
 
 ## Index
 
@@ -20,17 +19,15 @@ by users.
 * [_bl_core_unload_environments](#blcoreunloadenvironments)
 * [_bl_core_sync](#blcoresync)
 
-## Environments' arrays
+## Environments
 
-Environments' arrays are used to store the current and previous
-environments between `cd` executions. They are located in
-`_BL_STATE_CURRENT_ENVIRONMENTS` and `_BL_STATE_PREVIOUS_ENVIRONMENTS`
-and must be refreshed on each execution.
-Note that *current* and *previous* describe the full environments active at a
+Environments' arrays must be refreshed on each execution.
+
+Note that *current* and *previous* describe the active environments at a
 given directory state and *old* and *new* represent environments to be
-removed from or added to the current state when transitioning between
-directories.
------------------------------------------------------------------------------
+removed from or added to the current state.
+
+Also note that *unload* refers to an enviroment and *remove* to an element.
 
 ### _bl_core_refresh_current_environments
 
@@ -81,13 +78,6 @@ Gets the current environments which are not previous.
 
 * Used in [_bl_core_load_environments](#_bl_core_load_environments)
 
-## Unload stage
-
-Old environments are unloaded at every `cd` execution (i.e.
-all the elements from each old environment are removed).
-Note that *unload* refers to an enviroment and *remove* to an element.
------------------------------------------------------------------------------
-
 ### _bl_core_collect_elements
 
 Gets all the elements from the old environments, filtered by
@@ -107,6 +97,11 @@ get the aliases, functions and variables.
 
 * Used in [_bl_core_unload_environments](#_bl_core_unload_environments)
 
+## Unload stage
+
+Old environments are unloaded at every `cd` execution (i.e.
+all the elements from each old environment are removed).
+
 ### _bl_core_remove_elements
 
 Removes the given elements.
@@ -123,10 +118,10 @@ Removes the given elements.
 
 ### _bl_core_unload_environments
 
-Unloads the old environments (i.e, those exited at the `cd`
+Unloads the old environments (i.e. those exited at the `cd`
 execution).
-The function does nothing if the PPD (Path Previous Directory) is not inside
-the HOME directory.
+The function does nothing if the `PPD` (Path Previous Directory) is not inside
+the `HOME` directory.
 
 _Function has no arguments._
 
@@ -150,5 +145,5 @@ _Function has no arguments._
 
 #### See also
 
-* Used in [hook.sh](./hook.sh#cd)
+* Used in [hook.md](./hook.sh#cd)
 
