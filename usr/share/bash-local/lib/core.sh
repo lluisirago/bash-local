@@ -22,13 +22,13 @@
 
 # @description Calculates the current environments.
 #
-# Does it by searching a `.bl` directory in PWD (Path Working Directory)
+# Does it by searching a `bl` directory in PWD (Path Working Directory)
 # parents and storing them in `_BL_STATE_CURRENT_ENVIRONMENTS`. The function
 # does nothing but clear the array if the PWD is not inside the HOME directory.
 #
 # @noargs
 # @see Used in [_bl_core_refresh_environments](#_bl_core_refresh_environments)
-_bl_core_refresh_current_environments() {
+_bl_core_refresh_current_environments_array() {
 
     _BL_STATE_CURRENT_ENVIRONMENTS=()
     [[ $PWD == "$HOME"* ]] || return
@@ -36,9 +36,9 @@ _bl_core_refresh_current_environments() {
     local dir=$PWD
     while [[ $dir != "$HOME" ]]; do
 
-        # Store if has a `.bl` directory and remove the last segment (e.g. 
+        # Store if has a `bl` directory and remove the last segment (e.g. 
         # remove `/segment` from `$HOME/segment`)
-        [[ -d "$dir/.bl" ]] && _BL_STATE_CURRENT_ENVIRONMENTS+=("$dir")
+        [[ -d "$dir/${_BL_CONST[BL_DIR]}" ]] && _BL_STATE_CURRENT_ENVIRONMENTS+=("$dir")
         dir=${dir%/*}
     done
 
@@ -50,10 +50,13 @@ _bl_core_refresh_current_environments() {
 #
 # @noargs
 # @see Used in [_bl_core_sync](#_bl_core_sync)
-_bl_core_refresh_environments() {
+_bl_core_refresh_environments_arrays() {
 
     _BL_STATE_PREVIOUS_ENVIRONMENTS=("${_BL_STATE_CURRENT_ENVIRONMENTS[@]}")
-    _bl_core_refresh_current_environments
+    _bl_core_refresh_current_environments_array
+
+    echo "Previous environments:" "${_BL_STATE_PREVIOUS_ENVIRONMENTS[@]}"
+    echo "Current environments:" "${_BL_STATE_CURRENT_ENVIRONMENTS[@]}"
 
     return 0
 }
@@ -62,7 +65,7 @@ _bl_core_refresh_environments() {
 #
 # @arg $1 array Reference to the old environments' array.
 # @see Used in [_bl_core_unload_environments](#_bl_core_unload_environments)
-_bl_core_get_old_environments() {
+_bl_core_resolve_prunable_environments() {
     
     local -n old_environments_=$1
 
@@ -76,8 +79,10 @@ _bl_core_get_old_environments() {
 
     # Get the previous environments not in the map
     for environment in "${_BL_STATE_PREVIOUS_ENVIRONMENTS[@]}"; do
-        [[ ${current_environments["$environment"]+x} ]] || old_environments_+=("$environment")
+        [[ ! ${current_environments["$environment"]+x} || "$environment" == "${_BL_STATE[PPD]}" ]] && old_environments_+=("$environment")
     done
+
+    echo "Old environments: " "${old_environments[@]}"
 
     return 0
 }
@@ -86,7 +91,7 @@ _bl_core_get_old_environments() {
 #
 # @arg $1 array Reference to the new environments' array.
 # @see Used in [_bl_core_load_environments](#_bl_core_load_environments)
-_bl_core_get_new_environments() {
+_bl_core_resolve_applicable_environments() {
 
     local -n new_environments_=$1
 
@@ -100,7 +105,7 @@ _bl_core_get_new_environments() {
 
     # Get the current environments not in the map
     for environment in "${_BL_STATE_CURRENT_ENVIRONMENTS[@]}"; do
-        [[ ${previous_environments["$environment"]+x} ]] || new_environments_+=("$environment")
+        [[ ! ${previous_environments["$environment"]+x} || "$environment" == "$PWD" ]] && new_environments_+=("$environment")
     done
 
     return 0
@@ -118,7 +123,7 @@ _bl_core_get_new_environments() {
 # @arg $3 array Reference to the functions' array.
 # @arg $4 array Reference to the variables' array.
 # @see Used in [_bl_core_unload_environments](#_bl_core_unload_environments)
-_bl_core_collect_elements() {
+_bl_core_collect_removable_elements() {
 
     local -rn OLD_ENVIRONMENTS=$1
     local -n aliases_=$2
@@ -128,9 +133,7 @@ _bl_core_collect_elements() {
     local env
     for env in "${OLD_ENVIRONMENTS[@]}"; do
 
-        # Decide if local elements must be removed
-        # If `env == PWD` collect local and scoped elements
-        # If `env' != 'PWD` collect only scoped elements
+        # Decide if local elements must be collected
         if [[ "$env" == "${_BL_STATE[PPD]}" ]]; then
             local is_env_root=true
         else
@@ -160,12 +163,13 @@ _bl_core_collect_elements() {
                     "${_BL_CONST[KIND_VARIABLES]}") variables_+=("$line") ;;
                 esac
             fi
-        done < "$env/.bl/manifest"
-
-        #echo "Aliases: " "${aliases_[@]}"
-        #echo "Functions: " "${functions_[@]}"
-        #echo "Variables: " "${variables_[@]}"
+        done < "$env/${_BL_CONST[BL_DIR]}/${_BL_CONST[MANIFEST_FILE]}"
     done
+
+    echo "Old aliases: " "${aliases_[@]}"
+    echo "Old functions: " "${functions_[@]}"
+    echo "Old variables: " "${variables_[@]}"
+
     return 0
 }
 
@@ -213,14 +217,14 @@ _bl_core_remove_elements() {
 #
 # @noargs
 # @see Used in [_bl_core_sync](#_bl_core_sync)
-_bl_core_unload_environments() {
+_bl_core_prune_environments() {
     
     [[ ${_BL_STATE[PPD]} == $HOME* ]] || return
 
     local -a old_environments aliases functions variables
     
-    _bl_core_get_old_environments old_environments
-    _bl_core_collect_elements old_environments aliases functions variables
+    _bl_core_resolve_prunable_environments old_environments
+    _bl_core_collect_removable_elements old_environments aliases functions variables
     _bl_core_remove_elements aliases functions variables
 
     return 0
@@ -233,23 +237,34 @@ _bl_core_unload_environments() {
 # @description New environments are loaded at every `cd` execution (i.e.
 # all the elements from each new environment are added).
 
-#ToDo
+_bl_core_source_in_scope_elements() {
 
+    local -rn NEW_ENVIRONMENTS=$1
 
-_bl_core_add_elements() {
+    local env
+    for env in "${NEW_ENVIRONMENTS[@]}"; do
+
+        if [[ "$env" == "$PWD" ]]; then
+            source "$env/${_BL_CONST[BL_DIR]}/${_BL_CONST[SOURCE_DIR]}/${_BL_CONST[LOCAL_FILE]}"
+            echo "source $env/${_BL_CONST[BL_DIR]}/${_BL_CONST[SOURCE_DIR]}/${_BL_CONST[LOCAL_FILE]}"
+        fi
+        # Estoy cargando siempre scoped pero no hace falta, cuando paso de bash.../a a bash.../ solo necesito cargar local
+        # porque scoped ya estaba cargado
+        source "$env/${_BL_CONST[BL_DIR]}/${_BL_CONST[SOURCE_DIR]}/${_BL_CONST[SCOPED_FILE]}"
+        echo "source $env/${_BL_CONST[BL_DIR]}/${_BL_CONST[SOURCE_DIR]}/${_BL_CONST[SCOPED_FILE]}"
+    done    
 
     return 0
 }
 
-_bl_core_load_environments() {
-
-    [[ $PWD == $HOME* ]] || return
-
-    local -a new_environments aliases functions variables
+_bl_core_apply_environments() {
     
-    _bl_core_get_new_environments new_environments
-    _bl_core_collect_elements new_environments aliases functions variables
-    _bl_core_add_elements aliases functions variables
+    [[ $PWD == $HOME* ]] || return
+    
+    local -a new_environments
+    
+    _bl_core_resolve_applicable_environments new_environments
+    _bl_core_source_in_scope_elements new_environments
 
     return 0
 }
@@ -265,9 +280,9 @@ _bl_core_load_environments() {
 # @see Used in [hook.md](./hook.sh#cd)
 _bl_core_sync() {
 
-    _bl_core_refresh_environments
-    _bl_core_unload_environments
-    #_bl_core_load_environments
+    _bl_core_refresh_environments_arrays
+    _bl_core_prune_environments
+    _bl_core_apply_environments
 
     return 0
 }
