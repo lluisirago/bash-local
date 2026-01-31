@@ -2,12 +2,11 @@
 # -----------------------------------------------------------------------------
 # @file hook.sh
 #
-# @brief This script implements the 'cd' hook.
+# @brief This script implements the `cd` hook.
 # @description Change Directory (cd) function is redefined to act as a trigger
 # for bash-local synchronization.
-# -----------------------------------------------------------------------------
 
-# @brief Redefinition of 'cd' function
+# @brief Redefinition of `cd` function
 # @see cd --help
 cd() {
     

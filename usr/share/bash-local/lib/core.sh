@@ -3,32 +3,24 @@
 # @file core.sh
 #
 # @brief Internal core API.
-# @description Contains all the functions needed to synchronize the bash-local
-# environments with the current directory. Not intended to be called directly
+# @description Contains all functions needed to synchronize bash-local
+# environments with current directory. Not intended to be called directly
 # by users.
 
 
-# MARK: Envs
+# MARK: Envs' state
 # -----------------------------------------------------------------------------
-# @section Environments
-# @description Environments' arrays must be refreshed on each execution.
-# 
-# Note that *current* and *previous* describe the active environments at a
-# given directory state and *old* and *new* represent environments to be
-# removed from or added to the current state.
-#
-# Also note that *unload* or *load* refers to an enviroment and *remove* or
-# *add* to an element.
+# @section Environments' state
 
-# @description Calculates the current environments.
+# @description Calculates current environments by storing `PWD` parents with
+# `bl` directory.
 #
-# Does it by searching a `bl` directory in PWD (Path Working Directory)
-# parents and storing them in `_BL_STATE_CURRENT_ENVIRONMENTS`. The function
-# does nothing but clear the array if the PWD is not inside the HOME directory.
+# The function does nothing but clear current environments state if `PWD` is not
+# inside `HOME` directory.
 #
 # @noargs
-# @see Used in [_bl_core_refresh_environments](#_bl_core_refresh_environments)
-_bl_core_refresh_current_environments_array() {
+# @see Used in [_bl_core_refresh_environments_state](#_bl_core_refresh_environments_state)
+_bl_core_refresh_current_environments_state() {
 
     _BL_STATE_CURRENT_ENVIRONMENTS=()
     [[ $PWD == "$HOME"* ]] || return
@@ -41,151 +33,141 @@ _bl_core_refresh_current_environments_array() {
         [[ -d "$dir/${_BL_CONST[BL_DIR]}" ]] && _BL_STATE_CURRENT_ENVIRONMENTS+=("$dir")
         dir=${dir%/*}
     done
-
     return 0
 }
 
-# @description Updates the previous and current environments' arrays.
-# Sets the current environments as previous and calculates the current ones.
+# @description Updates previous and current environments (i.e. sets current
+# environments as previous and calculates current ones).
 #
 # @noargs
 # @see Used in [_bl_core_sync](#_bl_core_sync)
-_bl_core_refresh_environments_arrays() {
+_bl_core_refresh_environments_state() {
 
     _BL_STATE_PREVIOUS_ENVIRONMENTS=("${_BL_STATE_CURRENT_ENVIRONMENTS[@]}")
-    _bl_core_refresh_current_environments_array
-
-    echo "Previous environments:" "${_BL_STATE_PREVIOUS_ENVIRONMENTS[@]}"
-    echo "Current environments:" "${_BL_STATE_CURRENT_ENVIRONMENTS[@]}"
-
+    _bl_core_refresh_current_environments_state
     return 0
 }
 
-# @description Gets the previous environments which are not current.
+
+# MARK: Prune
+# -----------------------------------------------------------------------------
+# @section Prune stage
+
+# @description Gets elements (local or scoped) from environment.
 #
-# @arg $1 array Reference to the old environments' array.
-# @see Used in [_bl_core_unload_environments](#_bl_core_unload_environments)
-_bl_core_resolve_prunable_environments() {
+# @arg $1 string Environment.
+# @arg $2 bool Collect local elements.
+# @arg $3 bool Collect scoped elements.
+# @arg $4 array Reference to aliases' array.
+# @arg $5 array Reference to functions' array.
+# @arg $6 array Reference to variables' array.
+# @see Used in [_bl_core_resolve_prunable_elements](#_bl_core_resolve_prunable_elements)
+_bl_core_collect_elements() {
+
+    local -r ENVIRONMENT="$1"
+    local -r COLLECT_LOCAL_ELEMENTS="$2"
+    local -r COLLECT_SCOPED_ELEMENTS="$3"
+    local -n aliases__=$4
+    local -n functions__=$5
+    local -n variables__=$6
     
-    local -n old_environments_=$1
+    [[ "$COLLECT_LOCAL_ELEMENTS" == true ||
+       "$COLLECT_SCOPED_ELEMENTS" == true ]] || return
+
+    # Read manifest
+    local line
+    while IFS= read -r line; do
+
+        [[ -z "$line" ]] && continue
+        
+        # `line` is a section header (e.g. [local.aliases])
+        if [[ "$line" =~ ${_BL_CONST[SECTION_REGEX]} ]]; then
+
+            local section="${line:1:-1}"
+            local scope="${section%%.*}"
+            local kind="${section##*.}"
+
+        # `line` is an element
+        elif [[ ("$scope" == "${_BL_CONST[SCOPE_LOCAL]}" && "$COLLECT_LOCAL_ELEMENTS" == true) ||
+                ("$scope" == "${_BL_CONST[SCOPE_SCOPED]}" && "$COLLECT_SCOPED_ELEMENTS" == true) ]]; then
+            
+            case "$kind" in
+                "${_BL_CONST[KIND_ALIASES]}") aliases__+=("$line") ;;
+                "${_BL_CONST[KIND_FUNCTIONS]}") functions__+=("$line") ;;
+                "${_BL_CONST[KIND_VARIABLES]}") variables__+=("$line") ;;
+            esac
+        fi
+    done < "$ENVIRONMENT/${_BL_CONST[BL_DIR]}/${_BL_CONST[MANIFEST_FILE]}"
+    return 0
+}
+
+# @description Gets elements to remove. Only prunable environments will be
+# affected.
+#
+# Elements to remove based on prunable environment:
+# - **Root** to **child**: local elements.
+# - **Child** to **outside**: scoped elements.
+# - **Root** to **outside**: local and scoped elements.
+#
+# @arg $1 array Reference to aliases' array.
+# @arg $2 array Reference to functions' array.
+# @arg $3 array Reference to variables' array.
+# @see Used in [_bl_core_prune_environments](#_bl_core_prune_environments)
+_bl_core_resolve_prunable_elements() {
+    
+    local -n aliases_=$1
+    local -n functions_=$2
+    local -n variables_=$3
 
     local -A current_environments=()
     local environment
 
-    # Load the current environments into the map
+    # Load current environments into map
     for environment in "${_BL_STATE_CURRENT_ENVIRONMENTS[@]}"; do
         current_environments["$environment"]=1
     done
 
-    # Get the previous environments not in the map
+    # Iterate through prunable environments 
     for environment in "${_BL_STATE_PREVIOUS_ENVIRONMENTS[@]}"; do
-        [[ ! ${current_environments["$environment"]+x} || "$environment" == "${_BL_STATE[PPD]}" ]] && old_environments_+=("$environment")
-    done
 
-    echo "Old environments: " "${old_environments[@]}"
+        local collect_local_elements=false
+        local collect_scoped_elements=false
 
-    return 0
-}
+        # Root to child
+        # Still active (current and previous) and is previous root but not current
+        if [[ ${current_environments["$environment"]+x} &&
+              "$environment" == "${_BL_STATE[PPD]}" &&
+              "$environment" != "$PWD" ]]; then
 
-# @description Gets the current environments which are not previous.
-#
-# @arg $1 array Reference to the new environments' array.
-# @see Used in [_bl_core_load_environments](#_bl_core_load_environments)
-_bl_core_resolve_applicable_environments() {
+            collect_local_elements=true
 
-    local -n new_environments_=$1
+        # Child to outside
+        # Not active anymore and is not previous root
+        elif [[ ! ${current_environments["$environment"]+x} &&
+                "$environment" != "${_BL_STATE[PPD]}" ]]; then
 
-    local -A previous_environments=()
-    local environment
+            collect_scoped_elements=true
 
-    # Load the previous environments into the map
-    for environment in "${_BL_STATE_PREVIOUS_ENVIRONMENTS[@]}"; do
-        previous_environments["$environment"]=1
-    done
+        # Root to outside
+        # Not active anymore and is previous root
+        elif [[ ! ${current_environments["$environment"]+x} &&
+                "$environment" == "${_BL_STATE[PPD]}" ]]; then
 
-    # Get the current environments not in the map
-    for environment in "${_BL_STATE_CURRENT_ENVIRONMENTS[@]}"; do
-        [[ ! ${previous_environments["$environment"]+x} || "$environment" == "$PWD" ]] && new_environments_+=("$environment")
-    done
-
-    return 0
-}
-
-# @description Gets all the elements from the old environments, filtered by
-# kind.
-#
-# A list of these elements is stored at the `manifest` file located inside each
-# environment's `.bl` directory. This function reads the manifests in order to
-# get the aliases, functions and variables.
-#
-# @arg $1 array Constant reference to the old environments' array.
-# @arg $2 array Reference to the aliases' array.
-# @arg $3 array Reference to the functions' array.
-# @arg $4 array Reference to the variables' array.
-# @see Used in [_bl_core_unload_environments](#_bl_core_unload_environments)
-_bl_core_collect_removable_elements() {
-
-    local -rn OLD_ENVIRONMENTS=$1
-    local -n aliases_=$2
-    local -n functions_=$3
-    local -n variables_=$4
-
-    local env
-    for env in "${OLD_ENVIRONMENTS[@]}"; do
-
-        # Decide if local elements must be collected
-        if [[ "$env" == "${_BL_STATE[PPD]}" ]]; then
-            local is_env_root=true
-        else
-            local is_env_root=false
+            collect_local_elements=true
+            collect_scoped_elements=true
         fi
-        
-        # Extract aliases, functions and variables from the manifest
-        local line
-        while IFS= read -r line; do
- 
-            [[ -z "$line" ]] && continue
-            
-            # `line` is a section header (e.g. [local.aliases])
-            if [[ "$line" =~ ${_BL_CONST[SECTION_REGEX]} ]]; then
-
-                local section="${line:1:-1}"
-                local scope="${section%%.*}"
-                local kind="${section##*.}"
-
-            # `line` is an element
-            elif [[ ("$scope" == "${_BL_CONST[SCOPE_LOCAL]}" && "$is_env_root" == true) ||
-                     "$scope" == "${_BL_CONST[SCOPE_SCOPED]}" ]]; then
-                
-                case "$kind" in
-                    "${_BL_CONST[KIND_ALIASES]}") aliases_+=("$line") ;;
-                    "${_BL_CONST[KIND_FUNCTIONS]}") functions_+=("$line") ;;
-                    "${_BL_CONST[KIND_VARIABLES]}") variables_+=("$line") ;;
-                esac
-            fi
-        done < "$env/${_BL_CONST[BL_DIR]}/${_BL_CONST[MANIFEST_FILE]}"
+        _bl_core_collect_elements "$environment" "$collect_local_elements" \
+        "$collect_scoped_elements" aliases_ functions_ variables_
     done
-
-    echo "Old aliases: " "${aliases_[@]}"
-    echo "Old functions: " "${functions_[@]}"
-    echo "Old variables: " "${variables_[@]}"
-
     return 0
 }
 
-
-# MARK: Unload
-# -----------------------------------------------------------------------------
-# @section Unload stage
-# @description Old environments are unloaded at every `cd` execution (i.e.
-# all the elements from each old environment are removed).
-
-# @description Removes the given elements.
+# @description Removes elements.
 #
-# @arg $1 array Constant reference to the aliases' array.
-# @arg $2 array Constant reference to the functions' array.
-# @arg $3 array Constant reference to the variables' array.
-# @see Used in [_bl_core_unload_environments](#_bl_core_unload_environments)
+# @arg $1 array Constant reference to aliases' array.
+# @arg $2 array Constant reference to functions' array.
+# @arg $3 array Constant reference to variables' array.
+# @see Used in [_bl_core_prune_environments](#_bl_core_prune_environments)
 _bl_core_remove_elements() {
 
     local -rn ALIASES=$1
@@ -205,15 +187,13 @@ _bl_core_remove_elements() {
     for element in "${VARIABLES[@]}"; do
         unset "$element" 2>/dev/null
     done
-
     return 0
 }
 
-# @description Unloads the old environments (i.e. those exited at the `cd`
-# execution).
+# @description Prunes environments based on element scope.
 #
-# The function does nothing if the `PPD` (Path Previous Directory) is not inside
-# the `HOME` directory.
+# The function does nothing if `PPD` (Path Previous Directory) is not inside
+# `HOME` directory.
 #
 # @noargs
 # @see Used in [_bl_core_sync](#_bl_core_sync)
@@ -221,51 +201,126 @@ _bl_core_prune_environments() {
     
     [[ ${_BL_STATE[PPD]} == $HOME* ]] || return
 
-    local -a old_environments aliases functions variables
-    
-    _bl_core_resolve_prunable_environments old_environments
-    _bl_core_collect_removable_elements old_environments aliases functions variables
+    local -a aliases functions variables
+    _bl_core_resolve_prunable_elements aliases functions variables
     _bl_core_remove_elements aliases functions variables
-
     return 0
 }
 
 
-# MARK: Load
+# MARK: Apply
 # -----------------------------------------------------------------------------
-# @section Load stage
-# @description New environments are loaded at every `cd` execution (i.e.
-# all the elements from each new environment are added).
+# @section Apply stage
 
-_bl_core_source_in_scope_elements() {
+# @description Gets file (local or scoped) from environment.
+#
+# @arg $1 string Environment.
+# @arg $2 bool Collect local file.
+# @arg $3 bool Collect scoped file.
+# @arg $4 array Reference to files' array.
+# @see Used in [_bl_core_resolve_applicable_environments](#_bl_core_resolve_applicable_environments)
+_bl_core_collect_files() {
 
-    local -rn NEW_ENVIRONMENTS=$1
+    local -r ENVIRONMENT="$1"
+    local -r COLLECT_LOCAL_FILE="$2"
+    local -r COLLECT_SCOPED_FILE="$3"
+    local -n files__=$4
 
-    local env
-    for env in "${NEW_ENVIRONMENTS[@]}"; do
+    if [[ "$COLLECT_LOCAL_FILE" == true ]]; then
+        files__+=("$ENVIRONMENT/${_BL_CONST[BL_DIR]}/${_BL_CONST[SOURCE_DIR]}/${_BL_CONST[LOCAL_FILE]}")
+    fi
 
-        if [[ "$env" == "$PWD" ]]; then
-            source "$env/${_BL_CONST[BL_DIR]}/${_BL_CONST[SOURCE_DIR]}/${_BL_CONST[LOCAL_FILE]}"
-            echo "source $env/${_BL_CONST[BL_DIR]}/${_BL_CONST[SOURCE_DIR]}/${_BL_CONST[LOCAL_FILE]}"
-        fi
-        # Estoy cargando siempre scoped pero no hace falta, cuando paso de bash.../a a bash.../ solo necesito cargar local
-        # porque scoped ya estaba cargado
-        source "$env/${_BL_CONST[BL_DIR]}/${_BL_CONST[SOURCE_DIR]}/${_BL_CONST[SCOPED_FILE]}"
-        echo "source $env/${_BL_CONST[BL_DIR]}/${_BL_CONST[SOURCE_DIR]}/${_BL_CONST[SCOPED_FILE]}"
-    done    
-
+    if [[ "$COLLECT_SCOPED_FILE" == true ]]; then
+        files__+=("$ENVIRONMENT/${_BL_CONST[BL_DIR]}/${_BL_CONST[SOURCE_DIR]}/${_BL_CONST[SCOPED_FILE]}")
+    fi
     return 0
 }
 
+# @description Gets the files to source. Only applicable environments will be
+# affected.
+#
+# File to source based on applicable environment:
+# - **Child** to **root**: local file.
+# - **Outside** to **child**: scoped file.
+# - **Outside** to **root**: local and scoped files.
+#
+# @arg $1 array Reference to files' array.
+# @see Used in [_bl_core_apply_environments](#_bl_core_apply_environments)
+_bl_core_resolve_applicable_environments() {
+
+    local -n files_=$1
+
+    local -A previous_environments=()
+    local environment
+
+    # Load the previous environments into the map
+    for environment in "${_BL_STATE_PREVIOUS_ENVIRONMENTS[@]}"; do
+        previous_environments["$environment"]=1
+    done
+
+    # Iterate through applicable environments
+    for environment in "${_BL_STATE_CURRENT_ENVIRONMENTS[@]}"; do
+
+        local collect_local_file=false
+        local collect_scoped_file=false
+
+        # Child to root
+        # Still active (previous and current) and is current root but not previous
+        if [[ ${previous_environments["$environment"]+x} &&
+              "$environment" == "$PWD" &&
+              "$environment" != "${_BL_STATE[PPD]}" ]]; then
+
+            collect_local_file=true
+
+        # Outside to child
+        # Becomes active and is not current root
+        elif [[ ! ${previous_environments["$environment"]+x} &&
+                "$environment" != "$PWD" ]]; then
+
+            collect_scoped_file=true
+
+        # Outside to root
+        # Becomes active and is current root
+        elif [[ ! ${previous_environments["$environment"]+x} &&
+                "$environment" == "$PWD" ]]; then
+
+            collect_local_file=true
+            collect_scoped_file=true
+        fi
+        _bl_core_collect_files "$environment" "$collect_local_file" \
+        "$collect_scoped_file" files_
+    done
+    return 0
+}
+
+# @description Sources files.
+#
+# @arg $1 array Constant reference to files' array.
+# @see Used in [_bl_core_apply_environments](#_bl_core_apply_environments)
+_bl_core_source_files() {
+
+    local -rn FILES=$1
+
+    local file
+    for file in "${FILES[@]}"; do
+        source "$file"
+    done
+    return 0
+}
+
+# @description Applies environments based on element scope.
+#
+# The function does nothing if `PWD` is not inside `HOME` directory.
+#
+# @noargs
+# @see Used in [_bl_core_sync](#_bl_core_sync)
 _bl_core_apply_environments() {
     
     [[ $PWD == $HOME* ]] || return
     
-    local -a new_environments
-    
-    _bl_core_resolve_applicable_environments new_environments
-    _bl_core_source_in_scope_elements new_environments
-
+    local -a files
+    _bl_core_resolve_applicable_environments files
+    _bl_core_source_files files
     return 0
 }
 
@@ -273,16 +328,15 @@ _bl_core_apply_environments() {
 # -----------------------------------------------------------------------------
 # @section Environment synchronization
 
-# @description Reconciles the active environments with the current directory by
-# unloading exited environments and loading newly entered ones.
+# @description Reconciles active environments with current directory by
+# pruning exited environments and applying newly entered ones.
 #
 # @noargs
 # @see Used in [hook.md](./hook.sh#cd)
 _bl_core_sync() {
 
-    _bl_core_refresh_environments_arrays
+    _bl_core_refresh_environments_state
     _bl_core_prune_environments
     _bl_core_apply_environments
-
     return 0
 }

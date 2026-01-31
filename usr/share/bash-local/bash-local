@@ -4,24 +4,11 @@
 #
 # @brief This script acts as an entry-point for bash-local.
 # @description It is sourced when a new terminal session starts. Sources the
-# 'cd' hook and the CLI, as well as the internal core API and the context
+# `cd` hook and the CLI, as well as the internal core API and the context
 # definition.
-# -----------------------------------------------------------------------------
 
 # Source files
 source "$(dirname "${BASH_SOURCE[0]}")/lib/context.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/lib/core.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/lib/hook.sh"
 source "$(dirname "${BASH_SOURCE[0]}")/lib/cli.sh"
-
-# Create a temporal directory for the new terminal session
-#_BL_STATE[TMP_DIR]="$(mktemp -d "/tmp/bl.$UID.$BASHPID.XXXXXX")"
-
-# Set and create the environments' files 
-#_BL_STATE[PREVIOUS_ENVIRONMENTS_FILE]="${_BL_STATE[TMP_DIR]}/environments.alpha"
-#_BL_STATE[CURRENT_ENVIRONMENTS_FILE]="${_BL_STATE[TMP_DIR]}/environments.beta"
-#: > "${_BL_STATE[PREVIOUS_ENVIRONMENTS_FILE]}"
-#: > "${_BL_STATE[CURRENT_ENVIRONMENTS_FILE]}"
-
-# Delete the temporal directory when the terminal is closed
-#trap 'rm -rf "${_BL_STATE[TMP_DIR]}"' EXIT SIGHUP
