@@ -8,7 +8,7 @@
 # definition.
 
 # Source files
-source "$(dirname "${BASH_SOURCE[0]}")/lib/context.sh"
-source "$(dirname "${BASH_SOURCE[0]}")/lib/core.sh"
-source "$(dirname "${BASH_SOURCE[0]}")/lib/hook.sh"
-source "$(dirname "${BASH_SOURCE[0]}")/lib/cli.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/lib/context.bash"
+source "$(dirname "${BASH_SOURCE[0]}")/lib/core.bash"
+source "$(dirname "${BASH_SOURCE[0]}")/lib/hook.bash"
+source "$(dirname "${BASH_SOURCE[0]}")/lib/cli.bash"

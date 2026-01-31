@@ -1,6 +1,6 @@
 #!/bin/bash
 # -----------------------------------------------------------------------------
-# @file hook.sh
+# @file hook.bash
 #
 # @brief This script implements the `cd` hook.
 # @description Change Directory (cd) function is redefined to act as a trigger

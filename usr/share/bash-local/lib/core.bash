@@ -1,6 +1,6 @@
 #!/bin/bash
 # -----------------------------------------------------------------------------
-# @file core.sh
+# @file core.bash
 #
 # @brief Internal core API.
 # @description Contains all functions needed to synchronize bash-local

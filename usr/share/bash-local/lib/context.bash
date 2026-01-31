@@ -1,6 +1,6 @@
 #!/bin/bash
 # -----------------------------------------------------------------------------
-# @file context.sh
+# @file context.bash
 #
 # @brief Context definition.
 # @description Defines the constants as well as the dynamic state of bash-local.
