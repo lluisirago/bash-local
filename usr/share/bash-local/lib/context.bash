@@ -3,7 +3,7 @@
 # @file context.bash
 #
 # @brief Context definition.
-# @description Defines the constants as well as the dynamic state of bash-local.
+# @description Defines constants and dynamic state of bash-local.
 
 # Include Guard
 if [[ -z "${_BL_CONST[VERSION]+x}" ]]; then
@@ -30,12 +30,12 @@ if [[ -z "${_BL_CONST[VERSION]+x}" ]]; then
         [LOCAL_FILE]="local"
         [SCOPED_FILE]="scoped"
     )
+
+    declare -gA _BL_STATE=(
+        [PPD]=""
+    )
+
+    # Environments' state
+    declare -ga _BL_STATE_PREVIOUS_ENVIRONMENTS=()
+    declare -ga _BL_STATE_CURRENT_ENVIRONMENTS=()
 fi
-
-declare -gA _BL_STATE=(
-    [PPD]=""
-)
-
-# Environments state
-declare -ga _BL_STATE_PREVIOUS_ENVIRONMENTS=()
-declare -ga _BL_STATE_CURRENT_ENVIRONMENTS=()

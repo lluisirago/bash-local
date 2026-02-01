@@ -12,3 +12,13 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/context.bash"
 source "$(dirname "${BASH_SOURCE[0]}")/lib/core.bash"
 source "$(dirname "${BASH_SOURCE[0]}")/lib/hook.bash"
 source "$(dirname "${BASH_SOURCE[0]}")/lib/cli.bash"
+
+bl-init() {
+
+    mkdir ".bl" ".bl/source"
+    touch ".bl/manifest" ".bl/source/local" ".bl/source/scoped"
+    printf "[local.aliases]\n[local.functions]\n[local.variables]\n[scoped.aliases]\n[scoped.functions]\n[scoped.variables]" > ".bl/manifest"
+
+    echo "Environment created"
+    return 0
+}

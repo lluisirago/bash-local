@@ -1,12 +1,11 @@
-# hook.sh
+# hook.bash
 
-Redefinition of 'cd' function
+Implements `cd` hook.
 
 ## Overview
 
-Change Directory (cd) function is redefined to act as a trigger
+Change Directory (`cd`) function is redefined to act as trigger
 for bash-local synchronization.
------------------------------------------------------------------------------
 
 ## Index
 
@@ -14,7 +13,5 @@ for bash-local synchronization.
 
 ### cd
 
-#### See also
-
-* [cd --help](#cd---help)
+Redefinition of `cd` function. Same arguments as default `cd`.
 

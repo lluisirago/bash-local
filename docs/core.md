@@ -1,53 +1,60 @@
-# core.sh
+# core.bash
 
 Internal core API.
 
 ## Overview
 
-Contains all the functions needed to synchronize the bash-local
-environments with the current directory. Not intended to be called directly
+Contains all functions needed to synchronize bash-local
+environments with current directory. Not intended to be called directly
 by users.
+
+Actions on each environment according to state:
+| From \ To | Outside | Child | Root |
+| - | - | - | - |
+| **Outside** | - | Source scoped | Source scoped and local |
+| **Child** | Remove scoped | - | Source local |
+| **Root** | Remove scoped and local | Remove local | - |
 
 ## Index
 
-* [_bl_core_refresh_current_environments](#blcorerefreshcurrentenvironments)
-* [_bl_core_refresh_environments](#blcorerefreshenvironments)
-* [_bl_core_get_old_environments](#blcoregetoldenvironments)
-* [_bl_core_get_new_environments](#blcoregetnewenvironments)
-* [_bl_core_collect_elements](#blcorecollectelements)
-* [_bl_core_remove_elements](#blcoreremoveelements)
-* [_bl_core_unload_environments](#blcoreunloadenvironments)
-* [_bl_core_sync](#blcoresync)
+* [_bl_core_refresh_current_environments_state](#_bl_core_refresh_current_environments_state)
+* [_bl_core_refresh_environments_state](#_bl_core_refresh_environments_state)
+* [_bl_core_collect_elements](#_bl_core_collect_elements)
+* [_bl_core_resolve_prunable_elements](#_bl_core_resolve_prunable_elements)
+* [_bl_core_remove_elements](#_bl_core_remove_elements)
+* [_bl_core_prune_environments](#_bl_core_prune_environments)
+* [_bl_core_collect_files](#_bl_core_collect_files)
+* [_bl_core_resolve_applicable_environments](#_bl_core_resolve_applicable_environments)
+* [_bl_core_source_files](#_bl_core_source_files)
+* [_bl_core_apply_environments](#_bl_core_apply_environments)
+* [_bl_core_sync](#_bl_core_sync)
 
-## Environments
+## Environments' state
 
-Environments' arrays must be refreshed on each execution.
+Calculates current environments by storing `PWD` parents with
+`bl` directory.
 
-Note that *current* and *previous* describe the active environments at a
-given directory state and *old* and *new* represent environments to be
-removed from or added to the current state.
+The function does nothing but clear current environments state if `PWD` is not
+inside `HOME` directory.
 
-Also note that *unload* or *load* refers to an enviroment and *remove* or
-*add* to an element.
+### _bl_core_refresh_current_environments_state
 
-### _bl_core_refresh_current_environments
+Calculates current environments by storing `PWD` parents with
+`bl` directory.
 
-Calculates the current environments.
-
-Does it by searching a `.bl` directory in PWD (Path Working Directory)
-parents and storing them in `_BL_STATE_CURRENT_ENVIRONMENTS`. The function
-does nothing but clear the array if the PWD is not inside the HOME directory.
+The function does nothing but clear current environments state if `PWD` is not
+inside `HOME` directory.
 
 _Function has no arguments._
 
 #### See also
 
-* Used in [_bl_core_refresh_environments](#_bl_core_refresh_environments)
+* Used in [_bl_core_refresh_environments_state](#_bl_core_refresh_environments_state)
 
-### _bl_core_refresh_environments
+### _bl_core_refresh_environments_state
 
-Updates the previous and current environments' arrays.
-Sets the current environments as previous and calculates the current ones.
+Updates previous and current environments (i.e. sets current
+environments as previous and calculates current ones).
 
 _Function has no arguments._
 
@@ -55,76 +62,128 @@ _Function has no arguments._
 
 * Used in [_bl_core_sync](#_bl_core_sync)
 
-### _bl_core_get_old_environments
+## Prune stage
 
-Gets the previous environments which are not current.
-
-#### Arguments
-
-* **$1** (array): Reference to the old environments' array.
-
-#### See also
-
-* Used in [_bl_core_unload_environments](#_bl_core_unload_environments)
-
-### _bl_core_get_new_environments
-
-Gets the current environments which are not previous.
-
-#### Arguments
-
-* **$1** (array): Reference to the new environments' array.
-
-#### See also
-
-* Used in [_bl_core_load_environments](#_bl_core_load_environments)
+Gets elements (local or scoped) from environment.
 
 ### _bl_core_collect_elements
 
-Gets all the elements from the old environments, filtered by
-kind.
-
-A list of these elements is stored at the `manifest` file located inside each
-environment's `.bl` directory. This function reads the manifests in order to
-get the aliases, functions and variables.
+Gets elements (local or scoped) from environment.
 
 #### Arguments
 
-* **$1** (array): Constant reference to the old environments' array.
-* **$2** (array): Reference to the aliases' array.
-* **$3** (array): Reference to the functions' array.
-* **$4** (array): Reference to the variables' array.
+* **$1** (string): Environment.
+* **$2** (bool): Collect local elements.
+* **$3** (bool): Collect scoped elements.
+* **$4** (array): Reference to aliases' array.
+* **$5** (array): Reference to functions' array.
+* **$6** (array): Reference to variables' array.
 
 #### See also
 
-* Used in [_bl_core_unload_environments](#_bl_core_unload_environments)
+* Used in [_bl_core_resolve_prunable_elements](#_bl_core_resolve_prunable_elements)
 
-## Unload stage
+### _bl_core_resolve_prunable_elements
 
-Old environments are unloaded at every `cd` execution (i.e.
-all the elements from each old environment are removed).
+Gets elements to remove. Only prunable environments will be
+affected.
+
+Elements to remove based on prunable environment:
+- **Root** to **child**: local elements.
+- **Child** to **outside**: scoped elements.
+- **Root** to **outside**: local and scoped elements.
+
+#### Arguments
+
+* **$1** (array): Reference to aliases' array.
+* **$2** (array): Reference to functions' array.
+* **$3** (array): Reference to variables' array.
+
+#### See also
+
+* Used in [_bl_core_prune_environments](#_bl_core_prune_environments)
 
 ### _bl_core_remove_elements
 
-Removes the given elements.
+Removes elements.
 
 #### Arguments
 
-* **$1** (array): Constant reference to the aliases' array.
-* **$2** (array): Constant reference to the functions' array.
-* **$3** (array): Constant reference to the variables' array.
+* **$1** (array): Constant reference to aliases' array.
+* **$2** (array): Constant reference to functions' array.
+* **$3** (array): Constant reference to variables' array.
 
 #### See also
 
-* Used in [_bl_core_unload_environments](#_bl_core_unload_environments)
+* Used in [_bl_core_prune_environments](#_bl_core_prune_environments)
 
-### _bl_core_unload_environments
+### _bl_core_prune_environments
 
-Unloads the old environments (i.e. those exited at the `cd`
-execution).
+Prunes environments based on element scope.
 
-The function does nothing if the `PPD` (Path Previous Directory) is not inside
-the `HOME` directory.
+The function does nothing if `PPD` (Path Previous Directory) is not inside
+`HOME` directory.
+
+_Function has no arguments._
+
+#### See also
+
+* Used in [_bl_core_sync](#_bl_core_sync)
+
+## Apply stage
+
+Gets file (local or scoped) from environment.
+
+### _bl_core_collect_files
+
+Gets file (local or scoped) from environment.
+
+#### Arguments
+
+* **$1** (string): Environment.
+* **$2** (bool): Collect local file.
+* **$3** (bool): Collect scoped file.
+* **$4** (array): Reference to files' array.
+
+#### See also
+
+* Used in [_bl_core_resolve_applicable_environments](#_bl_core_resolve_applicable_environments)
+
+### _bl_core_resolve_applicable_environments
+
+Gets the files to source. Only applicable environments will be
+affected.
+
+File to source based on applicable environment:
+- **Child** to **root**: local file.
+- **Outside** to **child**: scoped file.
+- **Outside** to **root**: local and scoped files.
+
+#### Arguments
+
+* **$1** (array): Reference to files' array.
+
+#### See also
+
+* Used in [_bl_core_apply_environments](#_bl_core_apply_environments)
+
+### _bl_core_source_files
+
+Sources files.
+
+#### Arguments
+
+* **$1** (array): Constant reference to files' array.
+
+#### See also
+
+* Used in [_bl_core_apply_environments](#_bl_core_apply_environments)
+
+### _bl_core_apply_environments
+
+Applies environments based on element scope.
+
+The function does nothing if `PWD` is not inside `HOME` directory.
 
 _Function has no arguments._
 
@@ -134,13 +193,13 @@ _Function has no arguments._
 
 ## Environment synchronization
 
-New environments are loaded at every `cd` execution (i.e.
-all the elements from each new environment are added).
+Reconciles active environments with current directory by
+pruning exited environments and applying newly entered ones.
 
 ### _bl_core_sync
 
-Reconciles the active environments with the current directory by
-unloading exited environments and loading newly entered ones.
+Reconciles active environments with current directory by
+pruning exited environments and applying newly entered ones.
 
 _Function has no arguments._
 

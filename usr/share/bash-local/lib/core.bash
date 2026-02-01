@@ -6,6 +6,13 @@
 # @description Contains all functions needed to synchronize bash-local
 # environments with current directory. Not intended to be called directly
 # by users.
+#
+# Actions on each environment according to state:
+# | From \ To | Outside | Child | Root |
+# | - | - | - | - |
+# | **Outside** | - | Source scoped | Source scoped and local |
+# | **Child** | Remove scoped | - | Source local |
+# | **Root** | Remove scoped and local | Remove local | - |
 
 
 # MARK: Envs' state
