@@ -50,7 +50,7 @@ cd dir
 bl-init
 ```
 
-Then, add the following line to the `.bl/source/local` file:
+Then, add the following line into `.bl/source/local` file:
 
 ```bash
 alias hello='echo "world"'
@@ -95,7 +95,7 @@ cd dir
 bl-init
 ```
 
-Then, add the following line to the `.bl/source/scoped` file:
+Then, add the following into `.bl/source/scoped` file:
 
 ```bash
 foo() { 
