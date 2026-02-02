@@ -40,16 +40,17 @@ bl-init
 
 These elements will be set automatically when you change to the environment.
 
-## Example
+## Examples
 
-### 1. Set a local alias in a directory called `dir`
+### 1. Set a local alias
 
 ```bash
+mkdir dir dir/child
 cd dir
 bl-init
 ```
 
-Then, add the following line to the `.bl/source/local` file:
+Then, add the following line into `.bl/source/local` file:
 
 ```bash
 alias hello='echo "world"'
@@ -86,15 +87,15 @@ Command 'hello' not found.
 Command 'hello' not found.
 ```
 
-### 2. Set a scoped function in a directory called dir
+### 2. Set a scoped function
 
 ```bash
+mkdir dir dir/child
 cd dir
-mkdir child
 bl-init
 ```
 
-Then, add the following line to the `.bl/source/scoped` file:
+Then, add the following into `.bl/source/scoped` file:
 
 ```bash
 foo() { 
