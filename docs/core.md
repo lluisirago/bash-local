@@ -28,13 +28,13 @@ Environment transition model:
 
 Global state used by this module:
 
-- _BL_STATE_CURRENT_ENVIRONMENTS:
+- `_BL_STATE_CURRENT_ENVIRONMENTS`:
 List of environments active for the current PWD.
 
-- _BL_STATE_PREVIOUS_ENVIRONMENTS:
+- `_BL_STATE_PREVIOUS_ENVIRONMENTS`:
 List of environments active for the previous PWD.
 
-- _BL_STATE[PPD]:
+- `_BL_STATE[PPD]`:
 Previous working directory.
 
 ## Index
@@ -67,7 +67,7 @@ The function does nothing but clear current environments state if `PWD` is not
 inside `HOME` directory.
 
 Side effects:
-- Writes: _BL_STATE_CURRENT_ENVIRONMENTS
+- Writes: `_BL_STATE_CURRENT_ENVIRONMENTS`
 
 _Function has no arguments._
 
@@ -84,8 +84,8 @@ This function must be called once per directory change before any pruning or
 applying logic is executed.
 
 Side effects:
-- Reads: _BL_STATE_CURRENT_ENVIRONMENTS
-- Writes: _BL_STATE_PREVIOUS_ENVIRONMENTS
+- Reads: `_BL_STATE_CURRENT_ENVIRONMENTS`
+- Writes: `_BL_STATE_PREVIOUS_ENVIRONMENTS`
 
 _Function has no arguments._
 

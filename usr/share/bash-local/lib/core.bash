@@ -29,13 +29,13 @@
 #
 # Global state used by this module:
 #
-# - _BL_STATE_CURRENT_ENVIRONMENTS:
+# - `BL_STATE_CURRENT_ENVIRONMENTS`:
 #     List of environments active for the current PWD.
 #
-# - _BL_STATE_PREVIOUS_ENVIRONMENTS:
+# - `_BL_STATE_PREVIOUS_ENVIRONMENTS`:
 #     List of environments active for the previous PWD.
 #
-# - _BL_STATE[PPD]:
+# - `_BL_STATE[PPD]`:
 #     Previous working directory.
 
 # MARK: Envs' state
@@ -54,7 +54,7 @@
 # inside `HOME` directory.
 #
 # Side effects:
-# - Writes: _BL_STATE_CURRENT_ENVIRONMENTS
+# - Writes: `_BL_STATE_CURRENT_ENVIRONMENTS`
 #
 # @noargs
 # @see Used in [_bl_core_refresh_environments_state](#_bl_core_refresh_environments_state)
@@ -81,8 +81,8 @@ _bl_core_refresh_current_environments_state() {
 # applying logic is executed.
 #
 # Side effects:
-# - Reads: _BL_STATE_CURRENT_ENVIRONMENTS
-# - Writes: _BL_STATE_PREVIOUS_ENVIRONMENTS
+# - Reads: `_BL_STATE_CURRENT_ENVIRONMENTS`
+# - Writes: `_BL_STATE_PREVIOUS_ENVIRONMENTS`
 #
 # @noargs
 # @see Used in [_bl_core_sync](#_bl_core_sync)
