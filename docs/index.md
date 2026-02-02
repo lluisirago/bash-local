@@ -7,8 +7,8 @@ You do **not** need to read these files to use bash-local, but they are useful i
 
 ## Index
 
-* [Context](./context.md): eefines constants and dynamic state of bash-local
-* [Core](./core.md): implements the core synchronization logic
-* [Hook](./hook.md): implements `cd` hook
+* [Context](./context.md): defines constants and dynamic state of bash-local.
+* [Core](./core.md): implements the core synchronization logic.
+* [Hook](./hook.md): implements `cd` hook.
 
-*This documentation files are generated using [shdoc](https://github.com/reconquest/shdoc).*
+*Documentation files generated using [shdoc](https://github.com/reconquest/shdoc).*
