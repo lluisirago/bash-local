@@ -1,8 +1,6 @@
 # bash-local internal documentation
 
-## Note
-
-You do **not** need to read these to use bash-local, but they are useful if you want to:
+You do **not** need to read these files to use bash-local, but they are useful if you want to:
 - understand the internals
 - contribute
 - extend the system
