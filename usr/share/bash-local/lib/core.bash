@@ -2,28 +2,59 @@
 # -----------------------------------------------------------------------------
 # @file core.bash
 #
-# @brief Internal core API.
-# @description Contains all functions needed to synchronize bash-local
-# environments with current directory. Not intended to be called directly
-# by users.
+# @brief Internal core API for bash-local.
 #
-# Actions on each environment according to state:
+# @description
+# This module implements the core synchronization logic between the shell
+# environment and the current working directory.
+#
+# It tracks environment transitions while navigating the filesystem and
+# reconciles shell state accordingly by:
+# - Pruning elements from exited environments.
+# - Applying elements from newly entered environments.
+#
+# The module is not intended to be called directly by users.
+#
+# ---
+#
+# Environment transition model:
+#
 # | From \ To | Outside | Child | Root |
-# | - | - | - | - |
-# | **Outside** | - | Source scoped | Source scoped and local |
-# | **Child** | Remove scoped | - | Source local |
-# | **Root** | Remove scoped and local | Remove local | - |
-
+# |-----------|---------|-------|------|
+# | Outside   |   -     | Source scoped | Source scoped and local |
+# | Child     | Remove scoped |   -   | Source local |
+# | Root      | Remove scoped and local | Remove local |   -   |
+#
+# ---
+#
+# Global state used by this module:
+#
+# - _BL_STATE_CURRENT_ENVIRONMENTS:
+#     List of environments active for the current PWD.
+#
+# - _BL_STATE_PREVIOUS_ENVIRONMENTS:
+#     List of environments active for the previous PWD.
+#
+# - _BL_STATE[PPD]:
+#     Previous working directory.
 
 # MARK: Envs' state
 # -----------------------------------------------------------------------------
-# @section Environments' state
+# @section Environment state tracking
+#
+# Functions in this section maintain the current and previous environment sets
+# derived from the working directory.
 
-# @description Calculates current environments by storing `PWD` parents with
-# `bl` directory.
+# @description Computes the set of active environments for the current `PWD`.
+#
+# An environment is considered active if a `bl/` directory exists in the path
+# hierarchy between `PWD` and `HOME`.
 #
 # The function does nothing but clear current environments state if `PWD` is not
 # inside `HOME` directory.
+#
+# Side effects:
+# - Writes: _BL_STATE_CURRENT_ENVIRONMENTS
 #
 # @noargs
 # @see Used in [_bl_core_refresh_environments_state](#_bl_core_refresh_environments_state)
@@ -43,8 +74,15 @@ _bl_core_refresh_current_environments_state() {
     return 0
 }
 
-# @description Updates previous and current environments (i.e. sets current
-# environments as previous and calculates current ones).
+# @description Updates the environment state by shifting the current environments
+# to the previous set and recomputing the current ones.
+#
+# This function must be called once per directory change before any pruning or
+# applying logic is executed.
+#
+# Side effects:
+# - Reads: _BL_STATE_CURRENT_ENVIRONMENTS
+# - Writes: _BL_STATE_PREVIOUS_ENVIRONMENTS
 #
 # @noargs
 # @see Used in [_bl_core_sync](#_bl_core_sync)
@@ -59,15 +97,24 @@ _bl_core_refresh_environments_state() {
 # MARK: Prune
 # -----------------------------------------------------------------------------
 # @section Prune stage
-
-# @description Gets elements (local or scoped) from environment.
 #
-# @arg $1 string Environment.
-# @arg $2 bool Collect local elements.
-# @arg $3 bool Collect scoped elements.
-# @arg $4 array Reference to aliases' array.
-# @arg $5 array Reference to functions' array.
-# @arg $6 array Reference to variables' array.
+# Functions in this section determine which shell elements must be removed when
+# environments are exited as a result of directory transitions.
+
+# @description Collects prunable shell elements from an environment manifest.
+#
+# Depending on the provided flags, local and/or scoped elements are extracted
+# from the environment's manifest file and appended to the given arrays.
+#
+# If neither local nor scoped elements are requested, the function is a no-op.
+#
+# @arg $1 string Environment path.
+# @arg $2 bool   Whether to collect local elements.
+# @arg $3 bool   Whether to collect scoped elements.
+# @arg $4 array  Reference to aliases array.
+# @arg $5 array  Reference to functions array.
+# @arg $6 array  Reference to variables array.
+#
 # @see Used in [_bl_core_resolve_prunable_elements](#_bl_core_resolve_prunable_elements)
 _bl_core_collect_elements() {
 
@@ -108,17 +155,19 @@ _bl_core_collect_elements() {
     return 0
 }
 
-# @description Gets elements to remove. Only prunable environments will be
-# affected.
+# @description Determines which shell elements must be removed based on
+# environment transitions.
 #
-# Elements to remove based on prunable environment:
-# - **Root** to **child**: local elements.
-# - **Child** to **outside**: scoped elements.
-# - **Root** to **outside**: local and scoped elements.
+# Elements are selected according to transitions between the previous and
+# current environment sets (Outside / Child / Root).
 #
-# @arg $1 array Reference to aliases' array.
-# @arg $2 array Reference to functions' array.
-# @arg $3 array Reference to variables' array.
+# Only environments that are no longer active or have changed role are
+# considered prunable.
+#
+# @arg $1 array Reference to aliases array.
+# @arg $2 array Reference to functions array.
+# @arg $3 array Reference to variables array.
+#
 # @see Used in [_bl_core_prune_environments](#_bl_core_prune_environments)
 _bl_core_resolve_prunable_elements() {
     
@@ -169,11 +218,18 @@ _bl_core_resolve_prunable_elements() {
     return 0
 }
 
-# @description Removes elements.
+# @description Removes shell elements from the current shell session.
 #
-# @arg $1 array Constant reference to aliases' array.
-# @arg $2 array Constant reference to functions' array.
-# @arg $3 array Constant reference to variables' array.
+# Aliases, functions, and variables are removed silently if they exist.
+# Missing elements are ignored.
+#
+# Side effects:
+# - Modifies shell state.
+#
+# @arg $1 array Constant reference to aliases array.
+# @arg $2 array Constant reference to functions array.
+# @arg $3 array Constant reference to variables array.
+#
 # @see Used in [_bl_core_prune_environments](#_bl_core_prune_environments)
 _bl_core_remove_elements() {
 
@@ -197,10 +253,13 @@ _bl_core_remove_elements() {
     return 0
 }
 
-# @description Prunes environments based on element scope.
+# @description Prunes exited environments by removing their shell elements.
 #
-# The function does nothing if `PPD` (Path Previous Directory) is not inside
-# `HOME` directory.
+# The function determines prunable environments based on the previous and
+# current environment state and removes their scoped and/or local elements
+# accordingly.
+#
+# If the previous directory (`PPD`) is outside `$HOME`, the function is a no-op.
 #
 # @noargs
 # @see Used in [_bl_core_sync](#_bl_core_sync)
@@ -218,13 +277,20 @@ _bl_core_prune_environments() {
 # MARK: Apply
 # -----------------------------------------------------------------------------
 # @section Apply stage
-
-# @description Gets file (local or scoped) from environment.
 #
-# @arg $1 string Environment.
-# @arg $2 bool Collect local file.
-# @arg $3 bool Collect scoped file.
-# @arg $4 array Reference to files' array.
+# Functions in this section determine which environment files must be sourced
+# when entering new environments.
+
+# @description Collects source files from an environment.
+#
+# Depending on the provided flags, local and/or scoped source files are appended
+# to the given files array.
+#
+# @arg $1 string Environment path.
+# @arg $2 bool   Whether to collect the local source file.
+# @arg $3 bool   Whether to collect the scoped source file.
+# @arg $4 array  Reference to files array.
+#
 # @see Used in [_bl_core_resolve_applicable_environments](#_bl_core_resolve_applicable_environments)
 _bl_core_collect_files() {
 
@@ -243,15 +309,14 @@ _bl_core_collect_files() {
     return 0
 }
 
-# @description Gets the files to source. Only applicable environments will be
-# affected.
+# @description Determines which environment files must be sourced based on
+# environment transitions.
 #
-# File to source based on applicable environment:
-# - **Child** to **root**: local file.
-# - **Outside** to **child**: scoped file.
-# - **Outside** to **root**: local and scoped files.
+# Files are selected according to transitions between the previous and current
+# environment sets (Outside / Child / Root).
 #
-# @arg $1 array Reference to files' array.
+# @arg $1 array Reference to files array.
+#
 # @see Used in [_bl_core_apply_environments](#_bl_core_apply_environments)
 _bl_core_resolve_applicable_environments() {
 
@@ -300,9 +365,15 @@ _bl_core_resolve_applicable_environments() {
     return 0
 }
 
-# @description Sources files.
+# @description Sources environment files into the current shell session.
 #
-# @arg $1 array Constant reference to files' array.
+# Files are sourced in the order they appear in the provided array.
+#
+# Side effects:
+# - Executes shell code.
+#
+# @arg $1 array Constant reference to files array.
+#
 # @see Used in [_bl_core_apply_environments](#_bl_core_apply_environments)
 _bl_core_source_files() {
 
@@ -315,9 +386,12 @@ _bl_core_source_files() {
     return 0
 }
 
-# @description Applies environments based on element scope.
+# @description Applies newly entered environments by sourcing their files.
 #
-# The function does nothing if `PWD` is not inside `HOME` directory.
+# The function determines applicable environments based on the current
+# environment state and sources their scoped and/or local files accordingly.
+#
+# If `PWD` is outside `$HOME`, the function is a no-op.
 #
 # @noargs
 # @see Used in [_bl_core_sync](#_bl_core_sync)
@@ -334,12 +408,21 @@ _bl_core_apply_environments() {
 # MARK: Sync
 # -----------------------------------------------------------------------------
 # @section Environment synchronization
+#
+# High-level synchronization entry point combining state refresh, pruning, and
+# application stages.
 
-# @description Reconciles active environments with current directory by
-# pruning exited environments and applying newly entered ones.
+# @description Synchronizes shell state with the current working directory.
+#
+# This function:
+# 1. Refreshes environment state.
+# 2. Prunes exited environments.
+# 3. Applies newly entered environments.
+#
+# It is intended to be invoked from the directory change hook.
 #
 # @noargs
-# @see Used in [hook.md](./hook.sh#cd)
+# @see Used in [hook.sh](./hook.md#cd)
 _bl_core_sync() {
 
     _bl_core_refresh_environments_state
