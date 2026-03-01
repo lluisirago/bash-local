@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/user/bin/env bash
 # -----------------------------------------------------------------------------
 # @file core.bash
 #
@@ -38,6 +38,7 @@
 # - `_BL_STATE[PPD]`:
 #     Previous working directory.
 
+
 # MARK: Envs' state
 # -----------------------------------------------------------------------------
 # @section Environment state tracking
@@ -71,7 +72,6 @@ _bl_core_refresh_current_environments_state() {
         [[ -d "$dir/${_BL_CONST[BL_DIR]}" ]] && _BL_STATE_CURRENT_ENVIRONMENTS+=("$dir")
         dir=${dir%/*}
     done
-    return 0
 }
 
 # @description Updates the environment state by shifting the current environments
@@ -90,7 +90,6 @@ _bl_core_refresh_environments_state() {
 
     _BL_STATE_PREVIOUS_ENVIRONMENTS=("${_BL_STATE_CURRENT_ENVIRONMENTS[@]}")
     _bl_core_refresh_current_environments_state
-    return 0
 }
 
 
@@ -128,31 +127,28 @@ _bl_core_collect_elements() {
     [[ "$COLLECT_LOCAL_ELEMENTS" == true ||
        "$COLLECT_SCOPED_ELEMENTS" == true ]] || return
 
-    # Read manifest
-    local line
-    while IFS= read -r line; do
+    # Map manifest into LINES array
+    local LINES=()
+    mapfile -t LINES < "$ENVIRONMENT/${_BL_CONST[BL_DIR]}/${_BL_CONST[MANIFEST_FILE]}"
 
-        [[ -z "$line" ]] && continue
-        
-        # `line` is a section header (e.g. [local.aliases])
-        if [[ "$line" =~ ${_BL_CONST[SECTION_REGEX]} ]]; then
+    local -r SCOPED_OFFSET="${LINES[0]}"
 
-            local section="${line:1:-1}"
-            local scope="${section%%.*}"
-            local kind="${section##*.}"
+    # Decide the lines to read
+    local INITIAL_LINE=1
+    local END_LINE="${#LINES[@]}"
+    [[ "$COLLECT_LOCAL_ELEMENTS" == false ]] && INITIAL_LINE="$SCOPED_OFFSET"
+    [[ "$COLLECT_SCOPED_ELEMENTS" == false ]] && END_LINE="$SCOPED_OFFSET"
 
-        # `line` is an element
-        elif [[ ("$scope" == "${_BL_CONST[SCOPE_LOCAL]}" && "$COLLECT_LOCAL_ELEMENTS" == true) ||
-                ("$scope" == "${_BL_CONST[SCOPE_SCOPED]}" && "$COLLECT_SCOPED_ELEMENTS" == true) ]]; then
-            
-            case "$kind" in
-                "${_BL_CONST[KIND_ALIASES]}") aliases__+=("$line") ;;
-                "${_BL_CONST[KIND_FUNCTIONS]}") functions__+=("$line") ;;
-                "${_BL_CONST[KIND_VARIABLES]}") variables__+=("$line") ;;
-            esac
-        fi
-    done < "$ENVIRONMENT/${_BL_CONST[BL_DIR]}/${_BL_CONST[MANIFEST_FILE]}"
-    return 0
+    for (( i = INITIAL_LINE; i < END_LINE; i++ )); do
+
+        read -r name scope kind line <<< "${LINES[i]}"
+
+        case "$kind" in
+            "${_BL_CONST[KIND_ALIAS]}") aliases__+=("$name");;
+            "${_BL_CONST[KIND_FUNCTION]}") functions__+=("$name");;
+            "${_BL_CONST[KIND_VARIABLE]}") variables__+=("$name");;
+        esac
+    done
 }
 
 # @description Determines which shell elements must be removed based on
@@ -183,7 +179,7 @@ _bl_core_resolve_prunable_elements() {
         current_environments["$environment"]=1
     done
 
-    # Iterate through prunable environments 
+    # Iterate through previous environments 
     for environment in "${_BL_STATE_PREVIOUS_ENVIRONMENTS[@]}"; do
 
         local collect_local_elements=false
@@ -215,7 +211,6 @@ _bl_core_resolve_prunable_elements() {
         _bl_core_collect_elements "$environment" "$collect_local_elements" \
         "$collect_scoped_elements" aliases_ functions_ variables_
     done
-    return 0
 }
 
 # @description Removes shell elements from the current shell session.
@@ -250,7 +245,6 @@ _bl_core_remove_elements() {
     for element in "${VARIABLES[@]}"; do
         unset "$element" 2>/dev/null
     done
-    return 0
 }
 
 # @description Prunes exited environments by removing their shell elements.
@@ -270,7 +264,6 @@ _bl_core_prune_environments() {
     local -a aliases functions variables
     _bl_core_resolve_prunable_elements aliases functions variables
     _bl_core_remove_elements aliases functions variables
-    return 0
 }
 
 
@@ -306,7 +299,6 @@ _bl_core_collect_files() {
     if [[ "$COLLECT_SCOPED_FILE" == true ]]; then
         files__+=("$ENVIRONMENT/${_BL_CONST[BL_DIR]}/${_BL_CONST[SOURCE_DIR]}/${_BL_CONST[SCOPED_FILE]}")
     fi
-    return 0
 }
 
 # @description Determines which environment files must be sourced based on
@@ -362,7 +354,6 @@ _bl_core_resolve_applicable_environments() {
         _bl_core_collect_files "$environment" "$collect_local_file" \
         "$collect_scoped_file" files_
     done
-    return 0
 }
 
 # @description Sources environment files into the current shell session.
@@ -383,7 +374,6 @@ _bl_core_source_files() {
     for file in "${FILES[@]}"; do
         source "$file"
     done
-    return 0
 }
 
 # @description Applies newly entered environments by sourcing their files.
@@ -402,7 +392,6 @@ _bl_core_apply_environments() {
     local -a files
     _bl_core_resolve_applicable_environments files
     _bl_core_source_files files
-    return 0
 }
 
 # MARK: Sync
@@ -422,11 +411,10 @@ _bl_core_apply_environments() {
 # It is intended to be invoked from the directory change hook.
 #
 # @noargs
-# @see Used in [hook.sh](./hook.md#cd)
+# @see Used in [hook.bash](./hook.md#cd)
 _bl_core_sync() {
 
     _bl_core_refresh_environments_state
     _bl_core_prune_environments
     _bl_core_apply_environments
-    return 0
 }
