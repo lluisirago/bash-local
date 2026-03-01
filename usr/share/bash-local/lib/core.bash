@@ -58,7 +58,8 @@
 # - Writes: `_BL_STATE_CURRENT_ENVIRONMENTS`
 #
 # @noargs
-# @see Used in [_bl_core_refresh_environments_state](#_bl_core_refresh_environments_state)
+# @see Used in [_bl_core_refresh_environments_state]
+# (#_bl_core_refresh_environments_state)
 _bl_core_refresh_current_environments_state() {
 
     _BL_STATE_CURRENT_ENVIRONMENTS=()
@@ -69,13 +70,15 @@ _bl_core_refresh_current_environments_state() {
 
         # Store if has a `bl` directory and remove the last segment (e.g. 
         # remove `/segment` from `$HOME/segment`)
-        [[ -d "$dir/${_BL_CONST[BL_DIR]}" ]] && _BL_STATE_CURRENT_ENVIRONMENTS+=("$dir")
+        if [[ -d "$dir/${_BL_CONST[BL_DIR]}" ]]; then
+            _BL_STATE_CURRENT_ENVIRONMENTS+=("$dir")
+        fi
         dir=${dir%/*}
     done
 }
 
-# @description Updates the environment state by shifting the current environments
-# to the previous set and recomputing the current ones.
+# @description Updates the environment state by shifting the current
+# environments to the previous set and recomputing the current ones.
 #
 # This function must be called once per directory change before any pruning or
 # applying logic is executed.
@@ -93,17 +96,18 @@ _bl_core_refresh_environments_state() {
 }
 
 
-# MARK: Prune
+# MARK: Manifest
 # -----------------------------------------------------------------------------
 # @section Prune stage
 #
-# Functions in this section determine which shell elements must be removed when
-# environments are exited as a result of directory transitions.
+# Functions in this section are the responsible for accessing the manifest
+# files. They collect, remove and add rows from/to the file.
 
-# @description Collects prunable shell elements from an environment manifest.
+# @description Collects elements' name from an environment manifest.
 #
 # Depending on the provided flags, local and/or scoped elements are extracted
-# from the environment's manifest file and appended to the given arrays.
+# from the environment's manifest file and appended to the given
+# arrays.
 #
 # If neither local nor scoped elements are requested, the function is a no-op.
 #
@@ -114,8 +118,9 @@ _bl_core_refresh_environments_state() {
 # @arg $5 array  Reference to functions array.
 # @arg $6 array  Reference to variables array.
 #
-# @see Used in [_bl_core_resolve_prunable_elements](#_bl_core_resolve_prunable_elements)
-_bl_core_collect_elements() {
+# @see Used in [_bl_core_resolve_prunable_elements]
+# (#_bl_core_resolve_prunable_elements)
+_bl_core_collect_from_manifest_by_scope() {
 
     local -r ENVIRONMENT="$1"
     local -r COLLECT_LOCAL_ELEMENTS="$2"
@@ -129,7 +134,8 @@ _bl_core_collect_elements() {
 
     # Map manifest into LINES array
     local LINES=()
-    mapfile -t LINES < "$ENVIRONMENT/${_BL_CONST[BL_DIR]}/${_BL_CONST[MANIFEST_FILE]}"
+    mapfile -t LINES < \
+        "$ENVIRONMENT/${_BL_CONST[BL_DIR]}/${_BL_CONST[MANIFEST_FILE]}"
 
     local -r SCOPED_OFFSET="${LINES[0]}"
 
@@ -139,9 +145,9 @@ _bl_core_collect_elements() {
     [[ "$COLLECT_LOCAL_ELEMENTS" == false ]] && INITIAL_LINE="$SCOPED_OFFSET"
     [[ "$COLLECT_SCOPED_ELEMENTS" == false ]] && END_LINE="$SCOPED_OFFSET"
 
-    for (( i = INITIAL_LINE; i < END_LINE; i++ )); do
+    for (( _i_ = INITIAL_LINE; _i_ < END_LINE; _i_++ )); do
 
-        read -r name scope kind line <<< "${LINES[i]}"
+        read -r name scope kind first last <<< "${LINES[i]}"
 
         case "$kind" in
             "${_BL_CONST[KIND_ALIAS]}") aliases__+=("$name");;
@@ -150,6 +156,62 @@ _bl_core_collect_elements() {
         esac
     done
 }
+
+# @description Collects elements' scope, first and last line at the source file
+# from an environment manifest.
+#
+# Depending on the provided names, elements are extracted from the environment's
+# manifest file and appended to the given arrays.
+#
+# Element traits collected will be at the same position as the element name in
+# the given names array.
+#
+# If no elements are requested, the function is a no-op.
+#
+# @arg $1 string Environment path.
+# @arg $2 array  Constant reference to names array.
+# @arg $3 array  Reference to scopes array.
+# @arg $3 array  Reference to first lines array.
+# @arg $4 array  Reference to last lines array.
+#
+# @see Used in 
+_bl_core_collect_from_manifest_by_name() {
+    
+    local -r ENVIRONMENT="$1"
+    local -rn NAMES=$2
+    local -n scopes_=$3
+    local -n firsts_=$4
+    local -n lasts_=$5
+
+    [[ "${#NAMES[@]}" -ne 0 ]] || return
+
+    # Map manifest into LINES array
+    local LINES=()
+    mapfile -t LINES < \
+        "$ENVIRONMENT/${_BL_CONST[BL_DIR]}/${_BL_CONST[MANIFEST_FILE]}"
+    
+    for (( _i_ = 1; _i_ < "${#LINES[@]}"; _i_++ )); do
+
+        read -r name scope kind first last <<< "${LINES[i]}"
+
+        for (( _j_ = 0; _j_ < "${#NAMES[@]}"; _j_++ )); do
+
+            if [[ "$name" == "${LINES["$_i_"]}" ]]; then
+                scopes_[_j_]="$scope"
+                firsts_[_j_]="$first"
+                lasts_[_j_]="$last"
+            fi
+        done
+    done
+}
+
+
+# MARK: Prune
+# -----------------------------------------------------------------------------
+# @section Prune stage
+#
+# Functions in this section determine which shell elements must be removed when
+# environments are exited as a result of directory transitions.
 
 # @description Determines which shell elements must be removed based on
 # environment transitions.
@@ -186,7 +248,8 @@ _bl_core_resolve_prunable_elements() {
         local collect_scoped_elements=false
 
         # Root to child
-        # Still active (current and previous) and is previous root but not current
+        # Still active (current and previous) and is previous root but not
+        # current
         if [[ ${current_environments["$environment"]+x} &&
               "$environment" == "${_BL_STATE[PPD]}" &&
               "$environment" != "$PWD" ]]; then
@@ -208,14 +271,15 @@ _bl_core_resolve_prunable_elements() {
             collect_local_elements=true
             collect_scoped_elements=true
         fi
-        _bl_core_collect_elements "$environment" "$collect_local_elements" \
-        "$collect_scoped_elements" aliases_ functions_ variables_
+        _bl_core_collect_from_manifest_by_scope "$environment" \
+        "$collect_local_elements" "$collect_scoped_elements" \
+        aliases_ functions_ variables_
     done
 }
 
 # @description Removes shell elements from the current shell session.
 #
-# Aliases, functions, and variables are removed silently if they exist.
+# Aliases, functions, and variables are disabled silently if they exist.
 # Missing elements are ignored.
 #
 # Side effects:
@@ -226,7 +290,7 @@ _bl_core_resolve_prunable_elements() {
 # @arg $3 array Constant reference to variables array.
 #
 # @see Used in [_bl_core_prune_environments](#_bl_core_prune_environments)
-_bl_core_remove_elements() {
+_bl_core_disable_elements() {
 
     local -rn ALIASES=$1
     local -rn FUNCTIONS=$2
@@ -247,10 +311,10 @@ _bl_core_remove_elements() {
     done
 }
 
-# @description Prunes exited environments by removing their shell elements.
+# @description Prunes exited environments by disabling their shell elements.
 #
 # The function determines prunable environments based on the previous and
-# current environment state and removes their scoped and/or local elements
+# current environment state and disables their scoped and/or local elements
 # accordingly.
 #
 # If the previous directory (`PPD`) is outside `$HOME`, the function is a no-op.
@@ -263,7 +327,7 @@ _bl_core_prune_environments() {
 
     local -a aliases functions variables
     _bl_core_resolve_prunable_elements aliases functions variables
-    _bl_core_remove_elements aliases functions variables
+    _bl_core_disable_elements aliases functions variables
 }
 
 
@@ -284,7 +348,8 @@ _bl_core_prune_environments() {
 # @arg $3 bool   Whether to collect the scoped source file.
 # @arg $4 array  Reference to files array.
 #
-# @see Used in [_bl_core_resolve_applicable_environments](#_bl_core_resolve_applicable_environments)
+# @see Used in [_bl_core_resolve_applicable_environments]
+# (#_bl_core_resolve_applicable_environments)
 _bl_core_collect_files() {
 
     local -r ENVIRONMENT="$1"
@@ -292,12 +357,14 @@ _bl_core_collect_files() {
     local -r COLLECT_SCOPED_FILE="$3"
     local -n files__=$4
 
+    local -r BL_PATH="$ENVIRONMENT/${_BL_CONST[BL_DIR]}/"
+
     if [[ "$COLLECT_LOCAL_FILE" == true ]]; then
-        files__+=("$ENVIRONMENT/${_BL_CONST[BL_DIR]}/${_BL_CONST[SOURCE_DIR]}/${_BL_CONST[LOCAL_FILE]}")
+        files__+=("$BL_PATH/${_BL_CONST[SOURCE_DIR]}/${_BL_CONST[LOCAL_FILE]}")
     fi
 
     if [[ "$COLLECT_SCOPED_FILE" == true ]]; then
-        files__+=("$ENVIRONMENT/${_BL_CONST[BL_DIR]}/${_BL_CONST[SOURCE_DIR]}/${_BL_CONST[SCOPED_FILE]}")
+        files__+=("$BL_PATH/${_BL_CONST[SOURCE_DIR]}/${_BL_CONST[SCOPED_FILE]}")
     fi
 }
 
@@ -329,7 +396,8 @@ _bl_core_resolve_applicable_environments() {
         local collect_scoped_file=false
 
         # Child to root
-        # Still active (previous and current) and is current root but not previous
+        # Still active (previous and current) and is current root but not
+        # previous
         if [[ ${previous_environments["$environment"]+x} &&
               "$environment" == "$PWD" &&
               "$environment" != "${_BL_STATE[PPD]}" ]]; then
