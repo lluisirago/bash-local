@@ -98,12 +98,12 @@ _bl_core_refresh_environments_state() {
 
 # MARK: Manifest
 # -----------------------------------------------------------------------------
-# @section Prune stage
+# @section Manifest managing
 #
 # Functions in this section are the responsible for accessing the manifest
 # files. They collect, remove and add rows from/to the file.
 
-# @description Collects elements' name from an environment manifest.
+# @description Collects elements' name from an environment's manifest.
 #
 # Depending on the provided flags, local and/or scoped elements are extracted
 # from the environment's manifest file and appended to the given
@@ -157,22 +157,22 @@ _bl_core_collect_from_manifest_by_scope() {
     done
 }
 
-# @description Collects elements' scope, first and last line at the source file
-# from an environment manifest.
+# @description Collects scope, starting and ending lines for the given names
+# from an environment's manifest.
 #
-# Depending on the provided names, elements are extracted from the environment's
-# manifest file and appended to the given arrays.
+# Elements are extracted from the environment's manifest file and appended to
+# the given arrays.
 #
-# Element traits collected will be at the same position as the element name in
-# the given names array.
+# Element traits collected will be at the same position as element name in names
+# array.
 #
 # If no elements are requested, the function is a no-op.
 #
 # @arg $1 string Environment path.
 # @arg $2 array  Constant reference to names array.
 # @arg $3 array  Reference to scopes array.
-# @arg $3 array  Reference to first lines array.
-# @arg $4 array  Reference to last lines array.
+# @arg $3 array  Reference to starting lines array.
+# @arg $4 array  Reference to ending lines array.
 #
 # @see Used in 
 _bl_core_collect_from_manifest_by_name() {
@@ -180,8 +180,8 @@ _bl_core_collect_from_manifest_by_name() {
     local -r ENVIRONMENT="$1"
     local -rn NAMES=$2
     local -n scopes_=$3
-    local -n firsts_=$4
-    local -n lasts_=$5
+    local -n starts_=$4
+    local -n ends_=$5
 
     [[ "${#NAMES[@]}" -ne 0 ]] || return
 
@@ -190,18 +190,22 @@ _bl_core_collect_from_manifest_by_name() {
     mapfile -t LINES < \
         "$ENVIRONMENT/${_BL_CONST[BL_DIR]}/${_BL_CONST[MANIFEST_FILE]}"
     
+    # Turn LINES array into a map for fast lookup
+    local -A elements
     for (( _i_ = 1; _i_ < "${#LINES[@]}"; _i_++ )); do
 
-        read -r name scope kind first last <<< "${LINES[i]}"
+        read -r name scope kind start end <<< "${LINES[_i_]}"
+        elements["$name"]="$((_i_ - 1)) $scope $start $end"
+    done
 
-        for (( _j_ = 0; _j_ < "${#NAMES[@]}"; _j_++ )); do
+    # Collect elements
+    for name in "${NAMES[@]}"; do
 
-            if [[ "$name" == "${LINES["$_i_"]}" ]]; then
-                scopes_[_j_]="$scope"
-                firsts_[_j_]="$first"
-                lasts_[_j_]="$last"
-            fi
-        done
+        read -r pos scope start end <<< "${elements["$name"]}"
+
+        scopes_[pos]="$scope"
+        starts_[pos]="$start"
+        ends_[pos]="$end"
     done
 }
 
