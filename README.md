@@ -4,10 +4,9 @@
 
 Each project can have its own environment that is:
 
-- **Explicit** - nothing is inferred magically
-- **Fast** - runs in ~40–50 µs per `cd`
-- **Composable** - environments can be nested
-- **Lightweight** - pure Bash, no daemons, no external binaries
+- **Fast** - runs in ~40–50 µs per `cd`.
+- **Composable** - environments can be nested.
+- **Lightweight** - pure Bash, no daemons, no external binaries.
 
 bash-local coexists with your regular Bash environment and activates
 automatically when you move across directories.
@@ -29,7 +28,7 @@ And **environment transitions**:
 - Leaving a directory: clean environment
 - Moving between nested environments: reconcile both
 
-You never need to “enable” or “disable” anything manually.
+You never need to "enable" or "disable" anything manually.
 
 ---
 
@@ -226,10 +225,10 @@ Command 'tool' not found.
 ```
 
 ## Performance
-bash-local is designed to be **unnoticeable.**
-- **~40-50 µs per `cd`**
-- Pure Bash
-- No `fork`, no `exec`, no background processes
+bash-local is designed to be **unnoticeable**:
+- **~40-50 µs per `cd`.**
+- Pure Bash.
+- No `fork`, no `exec`, no background processes.
 
 ### Comparison (typical)
 
