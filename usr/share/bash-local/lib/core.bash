@@ -38,6 +38,30 @@
 # - `_BL_STATE[PPD]`:
 #     Previous working directory.
 
+# MARK: HOOK
+# -----------------------------------------------------------------------------
+# @section Environment synchronization for `cd` hook
+#
+# TODO
+
+# @description Synchronizes shell state with the current working directory.
+#
+# This function:
+# 1. Refreshes environment state.
+# 2. Prunes exited environments.
+# 3. Applies newly entered environments.
+#
+# It is intended to be invoked from the directory change hook.
+#
+# @noargs
+# @see Used in [hook.bash](./hook.md#cd)
+_bl_core_sync() {
+
+    _bl_core_refresh_environments_state
+    _bl_core_prune_environments
+    _bl_core_apply_environments
+}
+
 
 # MARK: Envs' state
 # -----------------------------------------------------------------------------
@@ -45,6 +69,24 @@
 #
 # Functions in this section maintain the current and previous environment sets
 # derived from the working directory.
+
+# @description Updates the environment state by shifting the current
+# environments to the previous set and recomputing the current ones.
+#
+# This function must be called once per directory change before any pruning or
+# applying logic is executed.
+#
+# Side effects:
+# - Reads: `_BL_STATE_CURRENT_ENVIRONMENTS`
+# - Writes: `_BL_STATE_PREVIOUS_ENVIRONMENTS`
+#
+# @noargs
+# @see Used in [_bl_core_sync](#_bl_core_sync)
+_bl_core_refresh_environments_state() {
+
+    _BL_STATE_PREVIOUS_ENVIRONMENTS=("${_BL_STATE_CURRENT_ENVIRONMENTS[@]}")
+    _bl_core_refresh_current_environments_state
+}
 
 # @description Computes the set of active environments for the current `PWD`.
 #
@@ -77,212 +119,6 @@ _bl_core_refresh_current_environments_state() {
     done
 }
 
-# @description Updates the environment state by shifting the current
-# environments to the previous set and recomputing the current ones.
-#
-# This function must be called once per directory change before any pruning or
-# applying logic is executed.
-#
-# Side effects:
-# - Reads: `_BL_STATE_CURRENT_ENVIRONMENTS`
-# - Writes: `_BL_STATE_PREVIOUS_ENVIRONMENTS`
-#
-# @noargs
-# @see Used in [_bl_core_sync](#_bl_core_sync)
-_bl_core_refresh_environments_state() {
-
-    _BL_STATE_PREVIOUS_ENVIRONMENTS=("${_BL_STATE_CURRENT_ENVIRONMENTS[@]}")
-    _bl_core_refresh_current_environments_state
-}
-
-
-# MARK: Manifest
-# -----------------------------------------------------------------------------
-# @section Manifest managing
-#
-# Functions in this section are the responsible for accessing the manifest
-# files. They collect, remove and add rows from/to the file.
-
-# @description Collects elements' name from an environment's manifest.
-#
-# Depending on the provided flags, local and/or scoped elements are extracted
-# from the environment's manifest file and appended to the given
-# arrays.
-#
-# If neither local nor scoped elements are requested, the function is a no-op.
-#
-# @arg $1 string Environment path.
-# @arg $2 bool   Whether to collect local elements.
-# @arg $3 bool   Whether to collect scoped elements.
-# @arg $4 array  Reference to aliases array.
-# @arg $5 array  Reference to functions array.
-# @arg $6 array  Reference to variables array.
-#
-# @see Used in [_bl_core_resolve_prunable_elements]
-# (#_bl_core_resolve_prunable_elements)
-_bl_core_collect_from_manifest_by_scope() {
-
-    local -r ENVIRONMENT="$1"
-    local -r COLLECT_LOCAL_ELEMENTS="$2"
-    local -r COLLECT_SCOPED_ELEMENTS="$3"
-    local -n aliases__=$4
-    local -n functions__=$5
-    local -n variables__=$6
-    
-    [[ "$COLLECT_LOCAL_ELEMENTS" == true ||
-       "$COLLECT_SCOPED_ELEMENTS" == true ]] || return 0
-
-    # Map manifest into LINES array
-    local LINES=()
-    mapfile -t LINES < \
-        "$ENVIRONMENT/${_BL_CONST[BL_DIR]}/${_BL_CONST[MANIFEST_FILE]}"
-
-    local -r SCOPED_OFFSET="${LINES[0]}"
-
-    # Decide the lines to read
-    local INITIAL_LINE=1
-    local END_LINE="${#LINES[@]}"
-    [[ "$COLLECT_LOCAL_ELEMENTS" == false ]] && INITIAL_LINE="$SCOPED_OFFSET"
-    [[ "$COLLECT_SCOPED_ELEMENTS" == false ]] && END_LINE="$SCOPED_OFFSET"
-
-    # Collect elements from array
-    for (( _i_ = INITIAL_LINE; _i_ < END_LINE; _i_++ )); do
-
-        read -r name scope kind first last <<< "${LINES[i]}"
-
-        case "$kind" in
-            "${_BL_CONST[KIND_ALIAS]}") aliases__+=("$name");;
-            "${_BL_CONST[KIND_FUNCTION]}") functions__+=("$name");;
-            "${_BL_CONST[KIND_VARIABLE]}") variables__+=("$name");;
-        esac
-    done
-}
-
-# @description Collects scope, starting and ending lines for the given names
-# from an environment's manifest.
-#
-# Elements are extracted from the environment's manifest file and appended to
-# the given arrays. Element traits collected will be at the same position as
-# element name in names array.
-#
-# If no elements are requested, the function is a no-op.
-#
-# @arg $1 string Environment path.
-# @arg $2 array  Constant reference to names array.
-# @arg $3 array  Reference to scopes array.
-# @arg $4 array  Reference to starting lines array.
-# @arg $5 array  Reference to ending lines array.
-#
-# @see Used in 
-_bl_core_collect_from_manifest_by_name() {
-    
-    local -r ENVIRONMENT="$1"
-    local -rn NAMES=$2
-    local -n scopes_=$3
-    local -n starts_=$4
-    local -n ends_=$5
-
-    [[ "${#NAMES[@]}" -ne 0 ]] || return 0
-
-    # Map manifest into LINES array
-    local LINES=()
-    mapfile -t LINES < \
-        "$ENVIRONMENT/${_BL_CONST[BL_DIR]}/${_BL_CONST[MANIFEST_FILE]}"
-    
-    # Turn LINES array into a map for faster lookup
-    local -A elements
-    for (( _i_ = 1; _i_ < ${#LINES[@]}; _i_++ )); do
-
-        read -r name scope kind start end <<< "${LINES[_i_]}"
-        elements["$name"]="$((_i_ - 1)) $scope $start $end"
-    done
-
-    # Collect elements from map
-    for name in "${NAMES[@]}"; do
-        read -r pos scope start end <<< "${elements["$name"]}"
-        scopes_[pos]="$scope"
-        starts_[pos]="$start"
-        ends_[pos]="$end"
-    done
-}
-
-# @description Inserts elements into an environment's manifest
-#
-# Elements given MUST be ordered by starting lines (or ending lines).
-#
-# If no elements given, the function is a no-op.
-#
-# Side effects:
-# - Writes: manifest file
-#
-# @arg $1 string Environment path.
-# @arg $2 array  Constant reference to names array.
-# @arg $3 array  Constant reference to scopes array.
-# @arg $4 array  Constant reference to kinds array.
-# @arg $5 array  Constant reference to starting lines array.
-# @arg $6 array  Constnt reference to ending lines array.
-#
-# @exitcode 1 If arrays ($2-$6) have a different number of elements.
-# @exitcode 2 If writing in manifest file failed.
-#
-# @see Used in 
-_bl_core_insert_into_manifest() {
-    
-    local -r ENVIRONMENT="$1"
-    local -rn NAMES=$2
-    local -rn SCOPES=$3
-    local -rn KINDS=$4
-    local -rn STARTS=$5
-    local -rn ENDS=$6
-
-    [[ "${#NAMES[@]}" -eq "${#SCOPES[@]}" && \
-       "${#NAMES[@]}" -eq "${#KINDS[@]}" && \
-       "${#NAMES[@]}" -eq "${#STARTS[@]}" && \
-       "${#NAMES[@]}" -eq "${#ENDS[@]}" ]] || return 1
-    [[ "${#NAMES[@]}" -ne 0 ]] || return 0
-
-    # Map manifest into LINES array
-    local LINES=()
-    mapfile -t LINES < \
-        "$ENVIRONMENT/${_BL_CONST[BL_DIR]}/${_BL_CONST[MANIFEST_FILE]}"
-
-    local scoped_offset="${LINES[0]}"
-
-    # starts and ends should be ordered
-    for (( pos = 0; pos < ${#NAMES[@]}; pos++ )); do
-
-        # Turn traits into a single line
-        local -r ELEMENT_LINE
-        printf -v ELEMENT_LINE '%s %s %s %s %s' \
-            "${NAMES[$pos]}" \
-            "${SCOPES[$pos]}" \
-            "${KINDS[$pos]}" \
-            "${STARTS[$pos]}" \
-            "${ENDS[$pos]}"
-
-        if [[ "${SCOPES["$pos"]}" == "${_BL_CONST[SCOPE_LOCAL]}" ]]; then
-
-            # Move elements one position to the right
-            for (( _i_ = ${#LINES[@]}; _i_ > scoped_offset; _i_-- )); do
-                LINES[_i_]="${LINES[_i_-1]}"
-            done
-
-            # Insert element
-            LINES[scoped_offset]="$ELEMENT_LINE"
-            LINES[0]="$(( scoped_offset++ ))"
-
-        elif [[ "${SCOPES["$pos"]}" == "${_BL_CONST[SCOPE_SCOPED]}" ]]; then
-            LINES+=("$ELEMENT_LINE")
-        fi
-    done
-    
-    # Atomic write in manifest file
-    local tmp
-    tmp="$(mktemp)" || return 2
-    printf '%s\n' "${LINES[@]}" > "$tmp"
-    mv "$tmp" "$ENVIRONMENT/${_BL_CONST[BL_DIR]}/${_BL_CONST[MANIFEST_FILE]}"
-}
-
 
 # MARK: Prune
 # -----------------------------------------------------------------------------
@@ -290,6 +126,26 @@ _bl_core_insert_into_manifest() {
 #
 # Functions in this section determine which shell elements must be removed when
 # environments are exited as a result of directory transitions.
+
+
+# @description Prunes exited environments by disabling their shell elements.
+#
+# The function determines prunable environments based on the previous and
+# current environment state and disables their scoped and/or local elements
+# accordingly.
+#
+# If the previous directory (`PPD`) is outside `$HOME`, the function is a no-op.
+#
+# @noargs
+# @see Used in [_bl_core_sync](#_bl_core_sync)
+_bl_core_prune_environments() {
+    
+    [[ ${_BL_STATE[PPD]} == $HOME* ]] || return 0
+
+    local -a aliases functions variables
+    _bl_core_resolve_prunable_elements aliases functions variables
+    _bl_core_disable_elements aliases functions variables
+}
 
 # @description Determines which shell elements must be removed based on
 # environment transitions.
@@ -311,7 +167,7 @@ _bl_core_resolve_prunable_elements() {
     local -n functions_=$2
     local -n variables_=$3
 
-    local -A current_environments=()
+    local -A current_environments
     local environment
 
     # Load current environments into map
@@ -355,7 +211,62 @@ _bl_core_resolve_prunable_elements() {
     done
 }
 
-# @description Removes shell elements from the current shell session.
+# @description Collects elements' name from an environment's manifest.
+#
+# Depending on the provided flags, local and/or scoped elements are extracted
+# from the environment's manifest file and appended to the given
+# arrays.
+#
+# If neither local nor scoped elements are requested, the function is a no-op.
+#
+# @arg $1 string Environment path.
+# @arg $2 bool   Whether to collect local elements.
+# @arg $3 bool   Whether to collect scoped elements.
+# @arg $4 array  Reference to aliases array.
+# @arg $5 array  Reference to functions array.
+# @arg $6 array  Reference to variables array.
+#
+# @see Used in [_bl_core_resolve_prunable_elements]
+# (#_bl_core_resolve_prunable_elements)
+_bl_core_collect_from_manifest_by_scope() {
+
+    local -r ENVIRONMENT="$1"
+    local -r COLLECT_LOCAL_ELEMENTS="$2"
+    local -r COLLECT_SCOPED_ELEMENTS="$3"
+    local -n aliases__=$4
+    local -n functions__=$5
+    local -n variables__=$6
+    
+    [[ "$COLLECT_LOCAL_ELEMENTS" == true ||
+       "$COLLECT_SCOPED_ELEMENTS" == true ]] || return 0
+
+    # Map manifest into MANIFEST_LINES array
+    local -a MANIFEST_LINES
+    mapfile -t MANIFEST_LINES < \
+        "$ENVIRONMENT/${_BL_CONST[BL_DIR]}/${_BL_CONST[MANIFEST_FILE]}"
+
+    local -r SCOPED_OFFSET="${MANIFEST_LINES[0]}"
+
+    # Decide the lines to read
+    local INITIAL_LINE=1
+    local END_LINE="${#MANIFEST_LINES[@]}"
+    [[ "$COLLECT_LOCAL_ELEMENTS" == false ]] && INITIAL_LINE="$SCOPED_OFFSET"
+    [[ "$COLLECT_SCOPED_ELEMENTS" == false ]] && END_LINE="$SCOPED_OFFSET"
+
+    # Collect elements from array
+    for (( _i_ = INITIAL_LINE; _i_ < END_LINE; _i_++ )); do
+
+        read -r name scope kind first last <<< "${MANIFEST_LINES[_i_]}"
+
+        case "$kind" in
+            "${_BL_CONST[KIND_ALIAS]}") aliases__+=("$name");;
+            "${_BL_CONST[KIND_FUNCTION]}") functions__+=("$name");;
+            "${_BL_CONST[KIND_VARIABLE]}") variables__+=("$name");;
+        esac
+    done
+}
+
+# @description Disables shell elements from the current shell session.
 #
 # Aliases, functions, and variables are disabled silently if they exist.
 # Missing elements are ignored.
@@ -389,25 +300,6 @@ _bl_core_disable_elements() {
     done
 }
 
-# @description Prunes exited environments by disabling their shell elements.
-#
-# The function determines prunable environments based on the previous and
-# current environment state and disables their scoped and/or local elements
-# accordingly.
-#
-# If the previous directory (`PPD`) is outside `$HOME`, the function is a no-op.
-#
-# @noargs
-# @see Used in [_bl_core_sync](#_bl_core_sync)
-_bl_core_prune_environments() {
-    
-    [[ ${_BL_STATE[PPD]} == $HOME* ]] || return 0
-
-    local -a aliases functions variables
-    _bl_core_resolve_prunable_elements aliases functions variables
-    _bl_core_disable_elements aliases functions variables
-}
-
 
 # MARK: Apply
 # -----------------------------------------------------------------------------
@@ -416,34 +308,22 @@ _bl_core_prune_environments() {
 # Functions in this section determine which environment files must be sourced
 # when entering new environments.
 
-# @description Collects source files from an environment.
+# @description Applies newly entered environments by sourcing their files.
 #
-# Depending on the provided flags, local and/or scoped source files are appended
-# to the given files array.
+# The function determines applicable environments based on the current
+# environment state and sources their scoped and/or local files accordingly.
 #
-# @arg $1 string Environment path.
-# @arg $2 bool   Whether to collect the local source file.
-# @arg $3 bool   Whether to collect the scoped source file.
-# @arg $4 array  Reference to files array.
+# If `PWD` is outside `$HOME`, the function is a no-op.
 #
-# @see Used in [_bl_core_resolve_applicable_environments]
-# (#_bl_core_resolve_applicable_environments)
-_bl_core_collect_files() {
-
-    local -r ENVIRONMENT="$1"
-    local -r COLLECT_LOCAL_FILE="$2"
-    local -r COLLECT_SCOPED_FILE="$3"
-    local -n files__=$4
-
-    local -r BL_PATH="$ENVIRONMENT/${_BL_CONST[BL_DIR]}/"
-
-    if [[ "$COLLECT_LOCAL_FILE" == true ]]; then
-        files__+=("$BL_PATH/${_BL_CONST[SOURCE_DIR]}/${_BL_CONST[LOCAL_FILE]}")
-    fi
-
-    if [[ "$COLLECT_SCOPED_FILE" == true ]]; then
-        files__+=("$BL_PATH/${_BL_CONST[SOURCE_DIR]}/${_BL_CONST[SCOPED_FILE]}")
-    fi
+# @noargs
+# @see Used in [_bl_core_sync](#_bl_core_sync)
+_bl_core_apply_environments() {
+    
+    [[ $PWD == $HOME* ]] || return 0
+    
+    local -a files
+    _bl_core_resolve_applicable_environments files
+    _bl_core_source_files files
 }
 
 # @description Determines which environment files must be sourced based on
@@ -459,7 +339,7 @@ _bl_core_resolve_applicable_environments() {
 
     local -n files_=$1
 
-    local -A previous_environments=()
+    local -A previous_environments
     local environment
 
     # Load the previous environments into the map
@@ -502,6 +382,36 @@ _bl_core_resolve_applicable_environments() {
     done
 }
 
+# @description Collects source files from an environment.
+#
+# Depending on the provided flags, local and/or scoped source files are appended
+# to the given files array.
+#
+# @arg $1 string Environment path.
+# @arg $2 bool   Whether to collect the local source file.
+# @arg $3 bool   Whether to collect the scoped source file.
+# @arg $4 array  Reference to files array.
+#
+# @see Used in [_bl_core_resolve_applicable_environments]
+# (#_bl_core_resolve_applicable_environments)
+_bl_core_collect_files() {
+
+    local -r ENVIRONMENT="$1"
+    local -r COLLECT_LOCAL_FILE="$2"
+    local -r COLLECT_SCOPED_FILE="$3"
+    local -n files__=$4
+
+    local -r BL_PATH="$ENVIRONMENT/${_BL_CONST[BL_DIR]}/"
+
+    if [[ "$COLLECT_LOCAL_FILE" == true ]]; then
+        files__+=("$BL_PATH/${_BL_CONST[SOURCE_DIR]}/${_BL_CONST[LOCAL_FILE]}")
+    fi
+
+    if [[ "$COLLECT_SCOPED_FILE" == true ]]; then
+        files__+=("$BL_PATH/${_BL_CONST[SOURCE_DIR]}/${_BL_CONST[SCOPED_FILE]}")
+    fi
+}
+
 # @description Sources environment files into the current shell session.
 #
 # Files are sourced in the order they appear in the provided array.
@@ -522,45 +432,216 @@ _bl_core_source_files() {
     done
 }
 
-# @description Applies newly entered environments by sourcing their files.
+
+# MARK: CLI
+# -----------------------------------------------------------------------------
+# @section Manifest managing
 #
-# The function determines applicable environments based on the current
-# environment state and sources their scoped and/or local files accordingly.
+# Functions in this section are the responsible for accessing the manifest
+# files. They collect, remove and add rows from/to the file.
+
+# @description Collects scope, starting and ending lines for the given elements
+# from an environment's manifest.
 #
-# If `PWD` is outside `$HOME`, the function is a no-op.
+# Elements are extracted from the environment's manifest file and appended to
+# the given arrays. Element traits collected will be at the same position as
+# element name in names array.
 #
-# @noargs
-# @see Used in [_bl_core_sync](#_bl_core_sync)
-_bl_core_apply_environments() {
+# If no elements are requested, the function is a no-op.
+#
+# If requested element does not exist, its traits are null.
+#
+# @arg $1 string Environment path.
+# @arg $2 array  Constant reference to names array.
+# @arg $3 array  Reference to lines array.
+# @arg $4 array  Reference to scopes array.
+# @arg $5 array  Reference to kinds array
+# @arg $6 array  Reference to starting lines array.
+# @arg $7 array  Reference to ending lines array.
+#
+# @see Used in 
+_bl_core_collect_from_manifest_by_name() {
     
-    [[ $PWD == $HOME* ]] || return 0
+    local -r ENVIRONMENT="$1"
+    local -rn NAMES=$2
+    local -n lines_=$3
+    local -n scopes_=$4
+    local -n kinds_=$5
+    local -n starts_=$6
+    local -n ends_=$7
+
+    [[ "${#NAMES[@]}" -ne 0 ]] || return 0
+
+    # Map manifest into MANIFEST_LINES array
+    local -a MANIFEST_LINES
+    mapfile -t MANIFEST_LINES < \
+        "$ENVIRONMENT/${_BL_CONST[BL_DIR]}/${_BL_CONST[MANIFEST_FILE]}"
     
-    local -a files
-    _bl_core_resolve_applicable_environments files
-    _bl_core_source_files files
+    # Turn MANIFEST_LINES array into map for faster lookup
+    local -A elements
+    for (( _i_ = 1; _i_ < ${#MANIFEST_LINES[@]}; _i_++ )); do
+
+        read -r name scope kind start end <<< "${MANIFEST_LINES[_i_]}"
+        elements["$name"]="$_i_ $scope $kind $start $end"
+    done
+
+    # Collect elements from map
+    for (( pos = 0; pos < "${#NAMES[@]}"; pos++)); do
+
+        # Check if the element exists
+        if [[ -n ${elements[${NAMES[pos]}]+x} ]]; then
+            read -r line scope kind start end <<< "${elements[${NAMES[pos]}]}"
+
+            lines_[pos]="$line"
+            scopes_[pos]="$scope"
+            kinds_[pos]="$kind"
+            starts_[pos]="$start"
+            ends_[pos]="$end"
+        fi
+    done
 }
 
-# MARK: Sync
+# MARK: add
 # -----------------------------------------------------------------------------
-# @section Environment synchronization
+# @section bl-add
 #
-# High-level synchronization entry point combining state refresh, pruning, and
-# application stages.
+# Functions in this section implement `bl-add` logic. TODO
 
-# @description Synchronizes shell state with the current working directory.
+# @description Appends elements to an environment's manifest. Inserts the
+# element at the end of its scope's section.
 #
-# This function:
-# 1. Refreshes environment state.
-# 2. Prunes exited environments.
-# 3. Applies newly entered environments.
+# Elements given MUST be ordered by starting lines (or ending lines).
 #
-# It is intended to be invoked from the directory change hook.
+# If no elements given, the function is a no-op.
 #
-# @noargs
-# @see Used in [hook.bash](./hook.md#cd)
-_bl_core_sync() {
+# Side effects:
+# - Writes: manifest file
+#
+# @arg $1 string Environment path.
+# @arg $2 array  Constant reference to names array.
+# @arg $3 array  Constant reference to scopes array.
+# @arg $4 array  Constant reference to kinds array.
+# @arg $5 array  Constant reference to starting lines array.
+# @arg $6 array  Constant reference to ending lines array.
+#
+# @exitcode 1 If arrays ($2-$6) have a different number of elements.
+# @exitcode 2 If writing in manifest file fails.
+#
+# @see Used in 
+_bl_core_append_to_manifest() {
+    
+    local -r ENVIRONMENT="$1"
+    local -rn NAMES=$2
+    local -rn SCOPES=$3
+    local -rn KINDS=$4
+    local -rn STARTS=$5
+    local -rn ENDS=$6
 
-    _bl_core_refresh_environments_state
-    _bl_core_prune_environments
-    _bl_core_apply_environments
+    [[ "${#NAMES[@]}" -eq "${#SCOPES[@]}" && \
+       "${#NAMES[@]}" -eq "${#KINDS[@]}" && \
+       "${#NAMES[@]}" -eq "${#STARTS[@]}" && \
+       "${#NAMES[@]}" -eq "${#ENDS[@]}" ]] || return 1
+    [[ "${#NAMES[@]}" -ne 0 ]] || return 0
+
+    # Map manifest into MANIFEST_LINES array
+    local -a MANIFEST_LINES
+    mapfile -t MANIFEST_LINES < \
+        "$ENVIRONMENT/${_BL_CONST[BL_DIR]}/${_BL_CONST[MANIFEST_FILE]}"
+
+    # starts and ends should be ordered
+    for (( pos = 0; pos < ${#NAMES[@]}; pos++ )); do
+
+        local scoped_offset="${MANIFEST_LINES[0]}"
+
+        # Turn traits into single line
+        local element_line
+        printf -v element_line '%s %s %s %s %s' \
+            "${NAMES[pos]}" \
+            "${SCOPES[pos]}" \
+            "${KINDS[pos]}" \
+            "${STARTS[pos]}" \
+            "${ENDS[pos]}"
+
+        if [[ "${SCOPES[pos]}" == "${_BL_CONST[SCOPE_LOCAL]}" ]]; then
+
+            # Move elements one position right
+            for (( _i_ = ${#MANIFEST_LINES[@]}; _i_ > scoped_offset; _i_-- )); do
+                MANIFEST_LINES[_i_]="${MANIFEST_LINES[_i_-1]}"
+            done
+
+            # Insert element
+            MANIFEST_LINES[scoped_offset]="$element_line"
+            MANIFEST_LINES[0]="$(( scoped_offset+1 ))"
+
+        elif [[ "${SCOPES[pos]}" == "${_BL_CONST[SCOPE_SCOPED]}" ]]; then
+            MANIFEST_LINES+=("$element_line")
+        fi
+    done
+    
+    # Atomic write in manifest file
+    local tmp
+    tmp="$(mktemp)" || return 2
+    printf '%s\n' "${MANIFEST_LINES[@]}" > "$tmp"
+    mv "$tmp" "$ENVIRONMENT/${_BL_CONST[BL_DIR]}/${_BL_CONST[MANIFEST_FILE]}"
+}
+
+
+# MARK: rm
+# -----------------------------------------------------------------------------
+# @section bl-rm
+#
+# Functions in this section implement `bl-rm` logic. TODO
+
+# @description Removes elements from an environment's manifest
+#
+# If no elements given, the function is a no-op.
+#
+# Side effects:
+# - Writes: manifest file
+#
+# @arg $1 string Environment path.
+# @arg $2 array  Constant reference to names array.
+# @arg $3 array  Constant reference to lines array.
+#
+# @exitcode 1 If arrays ($2-$6) have a different number of elements.
+# @exitcode 2 If writing in manifest file fails.
+#
+# @see Used in 
+_bl_core_remove_from_manifest() {
+    
+    local -r ENVIRONMENT="$1"
+    local -rn NAMES=$2
+    local -rn LINES=$3
+
+    [[ "${#NAMES[@]}" -eq "${#LINES[@]}" ]] || return 1
+    [[ "${#NAMES[@]}" -ne 0 ]] || return 0
+
+    # Map manifest into MANIFEST_LINES array
+    local -a MANIFEST_LINES
+    mapfile -t MANIFEST_LINES < \
+        "$ENVIRONMENT/${_BL_CONST[BL_DIR]}/${_BL_CONST[MANIFEST_FILE]}"
+
+    for (( pos = 0; pos < ${#NAMES[@]}; pos++ )); do
+
+        local scoped_offset="${MANIFEST_LINES[0]}"
+        local name="${NAMES[pos]}"
+        local line="${LINES[pos]}"
+
+        # Move elements one position left
+        for (( _i_ = line; _i_ < ${#MANIFEST_LINES[@]} - 1; _i_++ )); do
+            MANIFEST_LINES[_i_]="${MANIFEST_LINES[_i_+1]}"
+        done
+
+        # Remove last line
+        unset "MANIFEST_LINES[${#MANIFEST_LINES[@]}-1]"
+        if [[ "$line" -lt "$scoped_offset" ]]; then
+            MANIFEST_LINES[0]="$(( scoped_offset-1 ))"
+        fi
+    done
+    
+    # Atomic write in manifest file
+    local tmp
+    tmp="$(mktemp)" || return 2
+    printf '%s\n' "${MANIFEST_LINES[@]}" > "$tmp"
+    mv "$tmp" "$ENVIRONMENT/${_BL_CONST[BL_DIR]}/${_BL_CONST[MANIFEST_FILE]}"
 }
