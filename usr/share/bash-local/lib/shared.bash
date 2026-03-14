@@ -46,9 +46,12 @@ declare -grA _BL_CONST=(
     [LOCAL_FILE]="local"
     [SCOPED_FILE]="scoped"
 
+    # Log file
+    [LOG_FILE]="bl.log"
+    [MAX_LOG_FILE_SIZE]="1048576" # 1MB
+
     # Log colors
     [COLOR_RED]='\033[0;31m'
-    [COLOR_YELLOW]='\033[0;33m'
     [COLOR_RESET]='\033[0m'
 
     # CLI commands
@@ -89,6 +92,10 @@ declare -gA _BL_STATE=(
 declare -ga _BL_STATE_PREVIOUS_ENVIRONMENTS=()
 declare -ga _BL_STATE_CURRENT_ENVIRONMENTS=()
 
+declare -g _BL_CONF=(
+    [LOG_DIR]="$HOME/.local/state/bl"
+)
+
 
 # MARK: Log
 # -----------------------------------------------------------------------------
@@ -98,48 +105,64 @@ declare -ga _BL_STATE_CURRENT_ENVIRONMENTS=()
 #
 # ---
 #
-# Log types:
+# Log levels:
 #
 # | Type | Trigger | Color |
 # |------|--------|-------|
-# | info | Bad CLI usage | - |
-# | fatal | Error that impedes execution | Red |
-# | hint | - | Yellow |
+# | debug | Internal error written in log file (in terminal when debug is
+# enabled) | - |
 # | error | Error that does not impede execution | - |
+# | fatal | Error that impedes execution | Red |
+# | info | State changes | - |
+# | usage | Bas CLI usage | - |
 
-# @description Logs information for correct CLI usage, printing the given
-# message to stderr.
-#
-# Side effects:
-# - Writes to stderr
-#
-# @see Used in [_bl_log](#_bl_log)
-_bl_log_info() {
+_bl_log_init() {
 
-    echo -e "bl: $*" >&2
-    echo -e "Try '--help' for more information." >&2
+    local -r LOG_FILE="${_BL_CONF[LOG_DIR]}/${_BL_CONST[LOG_FILE]}"
+
+    mkdir -p "${_BL_CONF[LOG_DIR]}" 2>/dev/null
+    touch "$LOG_FILE" 2>/dev/null
+
+    if [[ -f "$LOG_FILE" ]]; then
+
+        local -r SIZE=$(wc -c <"$LOG_FILE" 2>/dev/null || echo 0)
+        if (( SIZE > _BL_CONST[MAX_LOG_FILE_SIZE])); then
+
+            # Rotate log file
+            local -r TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
+            local -r OLD_LOG_FILE="${_BL_CONF[LOG_DIR]}/bl-${TIMESTAMP}.log"
+
+            mv "$LOG_FILE" "$OLD_LOG_FILE" 2>/dev/null
+            touch "$LOG_FILE" 2>/dev/null
+
+            # Delete +30 days old files
+            find "${_BL_CONF[LOG_DIR]}" -name "bl-*.log" -type f \
+                 -mtime +30 -delete 2>/dev/null
+        fi
+    fi
+}
+_bl_log_init
+
+_bl_log_write() {
+
+    local -r LEVEL="$1"
+    local -r MESSAGE="$2"
+    local -r TIMESTAMP=$(date +"%Y-%m-%d %H:%M:%S")
+    local -r PID=$$
+
+    local -r LOG_FILE="${_BL_CONF[LOG_DIR]}/${_BL_CONST[LOG_FILE]}"
+
+    if [[ -n "${LOG_FILE:-}" && -w "$LOG_FILE" ]]; then
+        echo "[$TIMESTAMP] [$PID] [$LEVEL] $MESSAGE" >> "$LOG_FILE"
+    fi
 }
 
-# @description Logs a fatal error, printing the given message to stderr.
-#
-# Side effects:
-# - Writes to stderr
-#
-# @see Used in [_bl_log](#_bl_log)
-_bl_log_fatal() { echo -e "fatal: $*" >&2; }
+_bl_log_debug() {
 
-# @description Logs a hint, printing the given message to stderr.
-#
-# If terminal supports color, the message will be yellow.
-#
-# Side effects:
-# - Writes to stderr
-#
-# @see Used in [_bl_log](#_bl_log)
-_bl_log_hint() {
+
+    [[ "$BL_DEBUG" == true ]] && _bl_log_write "debug" "$1"
     
-    echo -e "${_BL_CONST[COLOR_YELLOW]}hint: $*${_BL_CONST[COLOR_RESET]}" >&2
-}
+    }
 
 # @description Logs an error, printing the given message to stderr.
 #
@@ -151,33 +174,42 @@ _bl_log_hint() {
 # @see Used in [_bl_log](#_bl_log)
 _bl_log_error() {
 
-    echo -e "${_BL_CONST[COLOR_RED]}error: $*${_BL_CONST[COLOR_RESET]}" >&2
+    echo -e "${_BL_CONST[COLOR_RED]}error: $1${_BL_CONST[COLOR_RESET]}" >&2
+}
+
+# @description Logs a fatal error, printing the given message to stderr.
+#
+# Side effects:
+# - Writes to stderr
+#
+# @see Used in [_bl_log](#_bl_log)
+_bl_log_fatal() { echo -e "fatal: $1" >&2; }
+
+# @description Logs information for state changes, printing the given message to
+# stderr.
+#
+# Side effects:
+# - Writes to stderr
+#
+# @see Used in [_bl_log](#_bl_log)
+_bl_log_info() { echo -e "$1" >&2; }
+
+# @description Logs information for correct CLI usage, printing the given
+# message to stderr.
+#
+# Side effects:
+# - Writes to stderr
+#
+# @see Used in [_bl_log](#_bl_log)
+_bl_log_usage() {
+
+    echo -e "bl: $1" >&2
+    echo -e "Try '--help' for more information." >&2
 }
 
 # @description Logs any of the supported messages.
 # 
 # Each log is determined by a code.
-#
-# Errors:
-# - `ERROR_NO_FILE`: given file does not exist.
-# - `ERROR_IS_DIR`: given file is a directory.
-#
-# Fatal errors:
-# - `FATAL_NO_DIR`: no directory given.
-# - `FATAL_NOT_A_DIR`: invalid directory.
-# - `FATAL_OUT_HOME`: given directory outside `HOME`.
-# - `FATAL_NO_VERSION`: version variable not declared.
-#
-# Hints:
-#
-# Informations:
-# - `INFO_BAD_OPTION`: invalid option.
-# - `INFO_BAD_COMMAND`: invalid command.
-#
-# Others:
-# - `USAGE`: bl function usage.
-# - `COMMANDS_LIST`: list of commands with descriptions.
-# - `HELP`: bl help (usage + commands list).
 #
 # @arg $1 string Log code
 # @arg $2 string Object to refer to
@@ -201,13 +233,13 @@ _bl_log() {
         "FATAL_NO_VERSION")     _bl_log_fatal "bl version not declared";;
         "FATAL_ALREADY_INIT")   _bl_log_fatal "$1: already initialized";;
 
-        # Hint
-
-
         # Info
-        "INFO_MANY_ARGS")   _bl_log_info "too many arguments";;
-        "INFO_BAD_OPTION")  _bl_log_info "unknown option: $1";;
-        "INFO_BAD_COMMAND") _bl_log_info "$1: not a bl command";;
+        "INFO_INIT") _bl_log_info "Initialized empty environment in '$1'";;
+
+        # Usage
+        "USAGE_MANY_ARGS")   _bl_log_usage "too many arguments";;
+        "USAGE_BAD_OPTION")  _bl_log_usage "unknown option: $1";;
+        "USAGE_BAD_COMMAND") _bl_log_usage "$1: not a bl command";;
 
         # Others
         "USAGE")
