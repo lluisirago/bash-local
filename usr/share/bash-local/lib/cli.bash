@@ -100,7 +100,7 @@ bl() {
                 return 0
                 ;;
             -*)
-                _bl_log "INFO_BAD_OPTION" "$1"
+                _bl_log "USAGE_BAD_OPTION" "$1"
                 return 1
                 ;;
             *)
@@ -112,8 +112,6 @@ bl() {
         shift
     done
 
-    [[ -z "$command" ]] && return 0
-
     case "$command" in
         "${_BL_CONST[COMMAND_ADD]}")        bl-add "$@";;
         "${_BL_CONST[COMMAND_CONFIG]}")     bl-config "$@";;
@@ -121,14 +119,14 @@ bl() {
         "${_BL_CONST[COMMAND_INIT]}")       bl-init "$@";;
         "${_BL_CONST[COMMAND_RM]}")         bl-rm "$@";;
         "${_BL_CONST[COMMAND_VERSION]}")    bl-version;;
-        *) _bl_log "INFO_BAD_COMMAND" "$command";;
+        *) _bl_log "USAGE_BAD_COMMAND" "$command";;
     esac
 }
 
 # MARK: init
 bl-init() {
 
-    # Parse arguments
+    # Parse options
     local -a args
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -137,7 +135,7 @@ bl-init() {
                 return 0
                 ;;
             -*)
-                _bl_log "INFO_BAD_OPTION" "$1"
+                _bl_log "USAGE_BAD_OPTION" "$1"
                 return 1
                 ;;
             *)  
@@ -146,25 +144,31 @@ bl-init() {
         esac
         shift
     done
-    [[ "${#args[@]}" -lt 2 ]] || { _bl_log "INFO_MANY_ARGS"; return 1; }
-
-    if [[ "${#args[@]}" -gt 0 ]]; then
-        local -r PATH=$(realpath -m -- "${args[0]}")
+    
+    # Parse environment path
+    if [[ "${#args[@]}" -eq 0 ]]; then
+        local -r ENVIRONMENT="$PWD"
+    elif [[ "${#args[@]}" -eq 1 ]]; then
+        local -r ENVIRONMENT=$(realpath -m -- "${args[0]}")
     else
-        local -r PATH="$PWD"
+        _bl_log "USAGE_MANY_ARGS"
+        return 1
     fi
-    _bl_assert_valid_dir "${_BL_CONST[COMMAND_INIT]}" "$PATH" || return 1
+    _bl_assert_valid_dir "${_BL_CONST[COMMAND_INIT]}" "$ENVIRONMENT" || return 1
 
     # Initialize environment
-    local -r BL_PATH="$PATH/${_BL_CONST[BL_DIR]}"
-    [[ ! -d "$BL_PATH" ]] || { _bl_log "FATAL_ALREADY_INIT" "$PATH"; return 1; }
-
+    # _bl_cli_init "$ENVIRONMENT" && _bl_log "INFO_INIT" "$BL_PATH" || return $?
+    local -r BL_PATH="$ENVIRONMENT/${_BL_CONST[BL_DIR]}"
+    [[ ! -d "$BL_PATH" ]] || { _bl_log "FATAL_ALREADY_INIT" "$ENVIRONMENT"; return 1; }
+    
     mkdir -p "$BL_PATH/${_BL_CONST[SOURCE_DIR]}"
-    touch "$BL_PATH/${_BL_CONST[MANIFEST_FILE]}" \
-          "$BL_PATH/${_BL_CONST[SOURCE_DIR]}/${_BL_CONST[LOCAL_FILE]}" \
+    echo "1" > "$BL_PATH/${_BL_CONST[MANIFEST_FILENAME]}"
+    touch "$BL_PATH/${_BL_CONST[SOURCE_DIR]}/${_BL_CONST[LOCAL_FILE]}" \
           "$BL_PATH/${_BL_CONST[SOURCE_DIR]}/${_BL_CONST[SCOPED_FILE]}"
 
-    echo "Initialized empty environment in '$BL_PATH'"
+    echo "1" > "$BL_PATH/${_BL_CONST[MANIFEST_FILENAME]}"
+
+    _bl_log "INFO_INIT" "$BL_PATH"
 }
 
 # MARK: show
@@ -177,7 +181,7 @@ bl-show() {
 bl-add() {
 
     # Options:   [-C <dir> | --cwd <dir> | -d <dir> | --dir <dir>] where to add the elements
-    #            [--init] create the environment without asking
+    #            [--init] create the environment if not exists
     #            [-f | --force] overwrite elements if exist
     #
     # Syntax:   [scope:][kind:]name[=[value | @file]]
@@ -194,9 +198,9 @@ bl-add() {
     # Could be used reading from stdin:
     #   cat file | bl add
     
-    local path="$PWD"
+    # Parse options
+    local environment="$PWD"
     local -a args
-
     while [[ $# -gt 0 ]]; do
         case "$1" in
             "${_BL_CONST[OPTION_ADD_H]}"|"${_BL_CONST[LONG_OPTION_ADD_HELP]}")
@@ -206,21 +210,21 @@ bl-add() {
             # Directory
             "${_BL_CONST[OPTION_ADD_C]}"|"${_BL_CONST[LONG_OPTION_ADD_CWD]}"|\
             "${_BL_CONST[OPTION_ADD_D]}"|"${_BL_CONST[LONG_OPTION_ADD_DIR]}")
-                path=$(realpath -m -- "$2")
+                environment=$(realpath -m -- "$2")
                 shift
                 ;;
             "${_BL_CONST[OPTION_ADD_C]}"=*|"${_BL_CONST[LONG_OPTION_ADD_CWD]}"=*|\
             "${_BL_CONST[OPTION_ADD_D]}"=*|"${_BL_CONST[LONG_OPTION_ADD_DIR]}"=*)
-                path=$(realpath -m -- "${1#*=}")
+                environment=$(realpath -m -- "${1#*=}")
                 ;;
             "${_BL_CONST[OPTION_ADD_C]}"*|"${_BL_CONST[OPTION_ADD_D]}"*)
-                path=$(realpath -m -- "${1:2}")
+                environment=$(realpath -m -- "${1:2}")
                 ;;
             # Other options
             "${_BL_CONST[LONG_OPTION_ADD_INIT]}") ;;
             "${_BL_CONST[OPTION_ADD_F]}"|"${_BL_CONST[LONG_OPTION_ADD_FORCE]}") ;;
             -*)
-                _bl_log "INFO_BAD_OPTION" "$1"
+                _bl_log "USAGE_BAD_OPTION" "$1"
                 return 1
                 ;;
             *)
@@ -229,20 +233,62 @@ bl-add() {
         esac
         shift
     done
-    _bl_assert_valid_dir "$1" "$path" || return 1
+    _bl_assert_valid_dir "$1" "$environment" || return 1
 
 
-    echo "$path"
+    #echo "$environment"
 
     # Add each argument (element)
     # Check with a regular expression
     # Validate each part of the argument (scope, kind, name, etc)
     # _bl_core_add_element scope kind name ...
+    local -a names lines scopes starts ends
+    names+=("local_test0")
+    scopes+=("local")
+    kinds+=("alias")
+    starts+=("0")
+    ends+=("0")
+    names+=("local_test1")
+    scopes+=("local")
+    kinds+=("alias")
+    starts+=("1")
+    ends+=("1")
+    names+=("scoped_test0")
+    scopes+=("scoped")
+    kinds+=("alias")
+    starts+=("0")
+    ends+=("0")
+    names+=("scoped_test1")
+    scopes+=("scoped")
+    kinds+=("alias")
+    starts+=("1")
+    ends+=("1")
+
+
+    _bl_manifest_collect_traits_by_name "$PWD" names lines__ scopes__ kinds__ starts__ ends__
+    for (( _i_ = 0; _i_ < ${#names[@]}; _i_++ )); do
+
+        if [[ -z "${lines__[_i_]+x}" ]]; then
+            real_names[_i_]="${names[_i_]}"
+            real_scopes[_i_]="${scopes[_i_]}"
+            real_kinds[_i_]="${kinds[_i_]}"
+            real_starts[_i_]="${starts[_i_]}"
+            real_ends[_i_]="${ends[_i_]}"
+        fi
+    done
+
+
+
+    _bl_core_append_to_manifest "$environment" real_names real_scopes real_kinds real_starts real_ends
 }
 
 # MARK: rm
 bl-rm() {
-    echo "rm"
+    
+    local -a names lines scopes kinds starts ends
+    names+=("local_test0")
+    _bl_manifest_collect_traits_by_name "$PWD" names lines scopes kinds starts ends
+    _bl_core_remove_from_manifest "$PWD" names lines
 }
 
 # MARK: config
@@ -268,4 +314,18 @@ bl-help() {
     fi
 
     man "bl $1"    
+}
+
+bl-show() {
+
+    local -a names lines scopes starts ends
+    names+=("local")
+    names+=("scoped")
+    names+=("foo")
+    names+=("version")
+    _bl_core_collect_from_manifest_by_name "$PWD" names lines scopes starts ends
+
+    for (( _i_ = 0; _i_ < "${#names[@]}"; _i_++ )); do
+        echo "${names[_i_]}: (${lines[_i_]}) ${scopes[_i_]} ${starts[_i_]} ${ends[_i_]}"
+    done
 }
