@@ -153,7 +153,7 @@ _bl_manifest_collect_names_by_scope() {
 # @exitcode 2 If writing in manifest file fails.
 #
 # @see Used in 
-_bl_core_append_to_manifest() {
+_bl_manifest_append_by_traits() {
     
     local -r ENVIRONMENT="$1"
     local -rn NAMES=$2
@@ -230,7 +230,7 @@ _bl_core_append_to_manifest() {
 # @exitcode 2 If writing in manifest file fails.
 #
 # @see Used in 
-_bl_core_remove_from_manifest() {
+_bl_manifest_remove_by_lines() {
     
     local -r ENVIRONMENT="$1"
     local -rn NAMES=$2

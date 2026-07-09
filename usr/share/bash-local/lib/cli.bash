@@ -279,7 +279,7 @@ bl-add() {
 
 
 
-    _bl_core_append_to_manifest "$environment" real_names real_scopes real_kinds real_starts real_ends
+    _bl_manifest_append_by_traits "$environment" real_names real_scopes real_kinds real_starts real_ends
 }
 
 # MARK: rm
@@ -288,7 +288,7 @@ bl-rm() {
     local -a names lines scopes kinds starts ends
     names+=("local_test0")
     _bl_manifest_collect_traits_by_name "$PWD" names lines scopes kinds starts ends
-    _bl_core_remove_from_manifest "$PWD" names lines
+    _bl_manifest_remove_by_lines "$PWD" names lines
 }
 
 # MARK: config
