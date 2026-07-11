@@ -53,15 +53,15 @@ declare -grA _BL_CONST=(
     # Config regex
     [CONFIG_REGEX]='^[[:space:]]*([[:alnum:]_-]+)[[:space:]]*=[[:space:]]*(.*)$'
 
-    # Settings name
-    [SETTING_VERBOSE]=verbose
-    [SETTING_COLOR]=color
-    [SETTING_DEBUG]=debug
+    # Config keys name
+    [CONFIG_KEY_COLOR]=color
+    [CONFIG_KEY_DEBUG]=debug
+    [CONFIG_KEY_VERBOSE]=verbose
 
     # Default config
-    [DEFAULT_CONFIG_VERBOSE]=false
     [DEFAULT_CONFIG_COLOR]=auto
     [DEFAULT_CONFIG_DEBUG]=false
+    [DEFAULT_CONFIG_VERBOSE]=false
 
     # Log file
     [LOG_DIR]=${XDG_STATE_HOME:-$HOME/.local/state}/bl
@@ -109,9 +109,9 @@ declare -gA _BL_STATE=(
     [PPD]=""
 
     # Config state
-    [CONFIG_VERBOSE]=""
     [CONFIG_COLOR]=""
-    [CONFIG_DEBUG]=""  
+    [CONFIG_DEBUG]=""
+    [CONFIG_VERBOSE]="" 
 )
 declare -ga _BL_STATE_PREVIOUS_ENVIRONMENTS=()
 declare -ga _BL_STATE_CURRENT_ENVIRONMENTS=()
