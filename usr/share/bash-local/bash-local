@@ -10,3 +10,16 @@
 source "$(dirname "${BASH_SOURCE[0]}")/lib/shared/shared.bash"
 source "$(dirname "${BASH_SOURCE[0]}")/lib/core.bash"
 source "$(dirname "${BASH_SOURCE[0]}")/lib/cli.bash"
+
+
+# @description Starts bash-local modules: configuration setup and logging
+# initialization.
+#
+# This function is executed on every terminal session start.
+#
+# @noargs
+_bl_start(){
+
+  true
+}
+_bl_start

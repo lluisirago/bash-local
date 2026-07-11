@@ -355,11 +355,11 @@ _bl_core_get_source_files() {
     local -r BL_PATH="$ENVIRONMENT/${_BL_CONST[BL_DIR]}/"
 
     if [[ "$COLLECT_LOCAL_FILE" == true ]]; then
-        files__+=("$BL_PATH/${_BL_CONST[SOURCE_DIR]}/${_BL_CONST[LOCAL_FILE]}")
+        files__+=("$BL_PATH/${_BL_CONST[SOURCE_DIR]}/${_BL_CONST[LOCAL_FILENAME]}")
     fi
 
     if [[ "$COLLECT_SCOPED_FILE" == true ]]; then
-        files__+=("$BL_PATH/${_BL_CONST[SOURCE_DIR]}/${_BL_CONST[SCOPED_FILE]}")
+        files__+=("$BL_PATH/${_BL_CONST[SOURCE_DIR]}/${_BL_CONST[SCOPED_FILENAME]}")
     fi
 }
 
