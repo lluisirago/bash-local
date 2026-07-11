@@ -231,6 +231,10 @@ _bl_log_debug() {
             _bl_log_debug_fatal \
                 "$2: given arrays have different size"
             ;;
+        "FATAL_UNDEFINED_VARIABLE")
+            _bl_log_debug_fatal \
+                "$2: undefined variable"
+            ;;
 
         # Default
         *) _bl_log_debug_error "unknown error: $*";;
@@ -241,6 +245,14 @@ _bl_log_debug_error() {
 
     _bl_log_write "error" "$1"
     # Añadir lógica para variable DEBUG activada
-    echo -e "${_BL_CONST[COLOR_RED]}[debug] error: $1${_BL_CONST[COLOR_RESET]}" >&2
+    echo -e "${_BL_CONST[COLOR_RED]}[DEBUG] error: $1${_BL_CONST[COLOR_RESET]}" >&2
+    
+}
+
+_bl_log_debug_fatal() {
+
+    _bl_log_write "fatal" "$1"
+    # Añadir lógica para variable DEBUG activada
+    echo -e "[DEBUG] fatal: $1" >&2
     
 }
