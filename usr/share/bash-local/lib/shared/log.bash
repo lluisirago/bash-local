@@ -12,7 +12,7 @@
 #
 # | Type | Trigger | Color |
 # |------|--------|-------|
-# | debug | Internal error written in log file (in terminal when debug is
+# | debug | Internal information written in log file (in terminal when debug is
 # enabled) | Yellow |
 # | error | Error that does not impede execution | Red |
 # | fatal | Error that impedes execution | - |
@@ -46,6 +46,8 @@ _bl_log_init() {
 }
 _bl_log_init
 
+
+
 _bl_log_write() {
 
     local -r LEVEL="$1"
@@ -60,11 +62,77 @@ _bl_log_write() {
     fi
 }
 
-_bl_log_debug() {
 
-    _bl_log_write "debug" "$1"
-    # Añadir lógica para variable DEBUG activada
-    
+# MARK: CLI
+# -----------------------------------------------------------------------------
+# @section CLI logging
+#
+# Functions in this section logs user-facing messages.
+
+# @description Logs any of the supported messages.
+# 
+# Each log is determined by a code.
+#
+# @arg $1 string Log code
+# @arg $2 string First object to refer to (optional)
+# @arg $3 string Second objecto to refer to (optional)
+#
+# @see Used in [cli.bash](./cli.md)
+_bl_log() {
+
+    local code="$1"
+
+    case "$code" in
+
+        # Error
+        "ERROR_IS_DIR")
+            _bl_log_error \
+                "$2: is a directory"
+            ;;
+        "ERROR_NO_FILE")
+            _bl_log_error \
+                "$2: no such file"
+            ;;
+
+        # Fatal
+        "FATAL_ALREADY_INIT")       _bl_log_fatal "$2: already initialized";;
+        "FATAL_NOT_A_DIR")          _bl_log_fatal "$2: not a directory";;
+        "FATAL_NO_CONFIG_FILE")          _bl_log_fatal "${_BL_CONST[CONFIG_FILE]}: no such file";;
+        "FATAL_NO_DIR")             _bl_log_fatal "missing directory after '$2'";;
+        "FATAL_NO_PERM_CONFIG_FILE")     _bl_log_fatal "${_BL_CONST[CONFIG_FILE]}: permission denied";;
+        "FATAL_NO_VERSION")         _bl_log_fatal "bl version not declared";;
+        "FATAL_OUT_HOME")           _bl_log_fatal "$2: not within '$HOME'";;
+        
+        # Info
+        "INFO_INIT") _bl_log_info "Initialized empty environment in '$2'";;
+
+        # Usage
+        "USAGE_MANY_ARGS")   _bl_log_usage "too many arguments";;
+        "USAGE_BAD_OPTION")  _bl_log_usage "unknown option: $2";;
+        "USAGE_BAD_COMMAND") _bl_log_usage "$2: not a bl command";;
+
+        # Others
+        "USAGE")
+            echo "usage: bl [-v | --version] [-h | --help] <command> [<args>]"
+            ;;
+        "COMMANDS_LIST")
+            {
+                echo "  init:Initialize a new environment";
+                echo "  add:Add aliases, functions and/or variables to an environment";
+                echo "  rm:Remove elements from an environment"
+            } | column -t -s ':'
+            ;;
+        "HELP")
+            _bl_log "USAGE"
+            echo ""
+            echo "These are common bl commands:"
+            echo ""
+            _bl_log "COMMANDS_LIST"
+            ;;
+
+        # Default
+        *) _bl_log_error "unknown error: $*";;
+    esac
 }
 
 # @description Logs an error, writing the given message in log file and
@@ -124,59 +192,55 @@ _bl_log_usage() {
     echo -e "Try '--help' for more information." >&2
 }
 
-# @description Logs any of the supported messages.
+
+# MARK: Debug
+# -----------------------------------------------------------------------------
+# @section Debug logging
+#
+# Functions in this section logs developer-facing messages.
+
+# @description Logs any of the supported debug messages.
 # 
 # Each log is determined by a code.
 #
 # @arg $1 string Log code
-# @arg $2 string Object to refer to
-#
-# @see Used in [cli.bash](./cli.md)
-_bl_log() {
+# @arg $2 string First object to refer to (optional)
+# @arg $3 string Second object to refer to (optional)
+_bl_log_debug() {
 
     local code="$1"
 
     case "$code" in
 
         # Error
-        "ERROR_NO_FILE")    _bl_log_error "$2: no such file";;
-        "ERROR_IS_DIR")     _bl_log_error "$2: is a directory";;
+        "ERROR_CONFIG_FILE_BAD_FORMAT")
+            _bl_log_debug_error  \
+                "${_BL_CONST[CONFIG_FILE]}: $2: invalid format"
+            ;;
+        "ERROR_CONFIG_FILE_BAD_KEY")
+            _bl_log_debug_error \
+                "${_BL_CONST[CONFIG_FILE]}: $2: unknown setting"
+            ;;
+        "ERROR_CONFIG_FILE_BAD_VALUE")
+            _bl_log_debug_error \
+                "${_BL_CONST[CONFIG_FILE]}: invalid value '$2' for '$3'"
+            ;;
 
         # Fatal
-        "FATAL_NO_DIR")         _bl_log_fatal "missing directory after '$2'";;
-        "FATAL_NOT_A_DIR")      _bl_log_fatal "$2: not a directory";;
-        "FATAL_OUT_HOME")       _bl_log_fatal "$2: not within '$HOME'";;
-        "FATAL_NO_VERSION")     _bl_log_fatal "bl version not declared";;
-        "FATAL_ALREADY_INIT")   _bl_log_fatal "$2: already initialized";;
-
-        # Info
-        "INFO_INIT") _bl_log_info "Initialized empty environment in '$2'";;
-
-        # Usage
-        "USAGE_MANY_ARGS")   _bl_log_usage "too many arguments";;
-        "USAGE_BAD_OPTION")  _bl_log_usage "unknown option: $2";;
-        "USAGE_BAD_COMMAND") _bl_log_usage "$2: not a bl command";;
-
-        # Others
-        "USAGE")
-            echo "usage: bl [-v | --version] [-h | --help] <command> [<args>]"
-            ;;
-        "COMMANDS_LIST")
-            {
-                echo "  init:Initialize a new environment";
-                echo "  add:Add aliases, functions and/or variables to an environment";
-                echo "  rm:Remove elements from an environment"
-            } | column -t -s ':'
-            ;;
-        "HELP")
-            _bl_log "USAGE"
-            echo ""
-            echo "These are common bl commands:"
-            echo ""
-            _bl_log "COMMANDS_LIST"
+        "FATAL_UNEVEN_ARRAYS")
+            _bl_log_debug_fatal \
+                "$2: given arrays have different size"
             ;;
 
         # Default
-        *) _bl_log_error "unknown error: $*";;
+        *) _bl_log_debug_error "unknown error: $*";;
     esac
+}
+
+_bl_log_debug_error() {
+
+    _bl_log_write "error" "$1"
+    # Añadir lógica para variable DEBUG activada
+    echo -e "${_BL_CONST[COLOR_RED]}[debug] error: $1${_BL_CONST[COLOR_RESET]}" >&2
+    
 }
