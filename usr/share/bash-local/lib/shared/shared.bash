@@ -44,17 +44,19 @@ declare -grA _BL_CONST=(
     [KIND_VARIABLE]=var
 
     [SOURCE_DIR]=source
-    [LOCAL_FILE]=local
-    [SCOPED_FILE]=scoped
+    [LOCAL_FILENAME]=local
+    [SCOPED_FILENAME]=scoped
 
-    # Config path
-    [CONFIG_PATH]=${XDG_CONFIG_HOME:-$HOME/.config}/bl/config
+    # Config file
+    [CONFIG_FILE]=${XDG_CONFIG_HOME:-$HOME/.config}/bl/config
 
-    # Settings name (used by the config file manager)
+    # Config regex
+    [CONFIG_REGEX]='^[[:space:]]*([[:alnum:]_-]+)[[:space:]]*=[[:space:]]*(.*)$'
+
+    # Settings name
     [SETTING_VERBOSE]=verbose
     [SETTING_COLOR]=color
     [SETTING_DEBUG]=debug
-    [SETTING_LOG_DIR]=log-dir
 
     # Default config
     [DEFAULT_CONFIG_VERBOSE]=false
@@ -118,8 +120,10 @@ declare -ga _BL_STATE_CURRENT_ENVIRONMENTS=()
 # MARK: Modules
 # -----------------------------------------------------------------------------
 # @section Source modules
+source "$(dirname "${BASH_SOURCE[0]}")/config.bash"
 source "$(dirname "${BASH_SOURCE[0]}")/log.bash"
 source "$(dirname "${BASH_SOURCE[0]}")/manifest.bash"
+
 
 # MARK: Assert
 # -----------------------------------------------------------------------------
