@@ -115,9 +115,10 @@ _bl_manifest_collect_names_by_scope() {
     [[ "$COLLECT_SCOPED_ELEMENTS" == false ]] && END_LINE="$SCOPED_OFFSET"
 
     # Collect elements from array
-    for (( _i_ = INITIAL_LINE; _i_ < END_LINE; _i_++ )); do
+    local i
+    for (( i = INITIAL_LINE; i < END_LINE; i++ )); do
 
-        read -r name scope kind first last <<< "${MANIFEST_LINES[_i_]}"
+        read -r name scope kind first last <<< "${MANIFEST_LINES[i]}"
 
         case "$kind" in
             "${_BL_CONST[KIND_ALIAS]}") aliases__+=("$name");;
@@ -226,7 +227,7 @@ _bl_manifest_append_by_traits() {
 # @arg $2 array  Constant reference to names array.
 # @arg $3 array  Constant reference to lines array.
 #
-# @exitcode 1 If arrays ($2-$6) have a different number of elements.
+# @exitcode 1 If arrays ($2-$6) have different number of elements.
 # @exitcode 2 If writing in manifest file fails.
 #
 # @see Used in 
@@ -244,15 +245,17 @@ _bl_manifest_remove_by_lines() {
     mapfile -t MANIFEST_LINES < \
         "$ENVIRONMENT/${_BL_CONST[BL_DIR]}/${_BL_CONST[MANIFEST_FILENAME]}"
 
-    for (( pos = 0; pos < ${#NAMES[@]}; pos++ )); do
+    local i
+    for (( i = 0; i < ${#NAMES[@]}; i++ )); do
 
         local scoped_offset="${MANIFEST_LINES[0]}"
-        local name="${NAMES[pos]}"
-        local line="${LINES[pos]}"
+        local name="${NAMES[i]}"
+        local line="${LINES[i]}"
 
         # Move elements one position left
-        for (( _i_ = line; _i_ < ${#MANIFEST_LINES[@]} - 1; _i_++ )); do
-            MANIFEST_LINES[_i_]="${MANIFEST_LINES[_i_+1]}"
+        local j
+        for (( j = line; j < ${#MANIFEST_LINES[@]} - 1; j++ )); do
+            MANIFEST_LINES[j]="${MANIFEST_LINES[j+1]}"
         done
 
         # Remove last line
