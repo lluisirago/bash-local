@@ -15,7 +15,7 @@ _bl_cli_completion() {
             # Collect bl long options
             local long_options=""
             for key in "${!_BL_CONST[@]}"; do
-                [[ "$key" == LONG_OPTION_BL_* ]] && long_options+=" ${_BL_CONST[$key]}"
+                [[ "$key" == BL_LONG_OPTION_* ]] && long_options+=" ${_BL_CONST[$key]}"
             done
 
             mapfile -t COMPREPLY < <(compgen -W "${long_options}" -- "${current}")
@@ -25,7 +25,7 @@ _bl_cli_completion() {
         # Collect bl commands
         local commands=""
         for key in "${!_BL_CONST[@]}"; do
-            [[ "$key" == COMMAND_* ]] && commands+=" ${_BL_CONST[$key]}"
+            [[ "$key" == *_COMMAND ]] && commands+=" ${_BL_CONST[$key]}"
         done
 
         mapfile -t COMPREPLY < <(compgen -W "${commands}" -- "${current}")
@@ -34,7 +34,7 @@ _bl_cli_completion() {
 
     case "${previous}" in
 
-        "${_BL_CONST[COMMAND_INIT]}")
+        "${_BL_CONST[INIT_COMMAND]}")
 
             # Complete long options
             if [[ "${current}" == -* ]]; then
@@ -42,7 +42,7 @@ _bl_cli_completion() {
                 # Collect init long options
                 local long_options=""
                 for key in "${!_BL_CONST[@]}"; do
-                    [[ "$key" == LONG_OPTION_INIT_* ]] && long_options+=" ${_BL_CONST[$key]}"
+                    [[ "$key" == INIT_LONG_OPTION_* ]] && long_options+=" ${_BL_CONST[$key]}"
                 done
 
                 mapfile -t COMPREPLY < <(compgen -W "${long_options}" -- "${current}")
@@ -55,7 +55,7 @@ _bl_cli_completion() {
             return 0
             ;;
         
-        "${_BL_CONST[COMMAND_ADD]}")
+        "${_BL_CONST[ADD_COMMAND]}")
 
             # Complete long options
             if [[ "${current}" == -* ]]; then
@@ -63,7 +63,7 @@ _bl_cli_completion() {
                 # Collect add long options
                 local long_options=""
                 for key in "${!_BL_CONST[@]}"; do
-                    [[ "$key" == LONG_OPTION_ADD_* ]] && long_options+=" ${_BL_CONST[$key]}"
+                    [[ "$key" == ADD_LONG_OPTION_* ]] && long_options+=" ${_BL_CONST[$key]}"
                 done
 
                 mapfile -t COMPREPLY < <(compgen -W "${long_options}" -- "${current}")
@@ -91,16 +91,16 @@ bl() {
     local command
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            "${_BL_CONST[OPTION_BL_H]}"|"${_BL_CONST[LONG_OPTION_BL_HELP]}")
+            "${_BL_CONST[BL_OPTION_H]}"|"${_BL_CONST[BL_LONG_OPTION_HELP]}")
                 bl-help
                 return 0
                 ;;
-            "${_BL_CONST[OPTION_BL_V]}"|"${_BL_CONST[LONG_OPTION_BL_VERSION]}")
+            "${_BL_CONST[BL_OPTION_V]}"|"${_BL_CONST[BL_LONG_OPTION_VERSION]}")
                 bl-version
                 return 0
                 ;;
             -*)
-                _bl_log "USAGE_BAD_OPTION" "$1"
+                bl_log "USAGE_BAD_OPTION" "$1"
                 return 1
                 ;;
             *)
@@ -113,13 +113,13 @@ bl() {
     done
 
     case "$command" in
-        "${_BL_CONST[COMMAND_ADD]}")        bl-add "$@";;
-        "${_BL_CONST[COMMAND_CONFIG]}")     bl-config "$@";;
-        "${_BL_CONST[COMMAND_HELP]}")       bl-help "$@";;
-        "${_BL_CONST[COMMAND_INIT]}")       bl-init "$@";;
-        "${_BL_CONST[COMMAND_RM]}")         bl-rm "$@";;
-        "${_BL_CONST[COMMAND_VERSION]}")    bl-version;;
-        *) _bl_log "USAGE_BAD_COMMAND" "$command";;
+        "${_BL_CONST[ADD_COMMAND]}")        bl-add "$@";;
+        "${_BL_CONST[CONFIG_COMMAND]}")     bl-config "$@";;
+        "${_BL_CONST[HELP_COMMAND]}")       bl-help "$@";;
+        "${_BL_CONST[INIT_COMMAND]}")       bl-init "$@";;
+        "${_BL_CONST[RM_COMMAND]}")         bl-rm "$@";;
+        "${_BL_CONST[VERSION_COMMAND]}")    bl-version;;
+        *) bl_log "USAGE_BAD_COMMAND" "$command";;
     esac
 }
 
@@ -130,12 +130,12 @@ bl-init() {
     local -a args
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            "${_BL_CONST[OPTION_INIT_H]}"|"${_BL_CONST[LONG_OPTION_INIT_HELP]}")
-                bl-help "${_BL_CONST[COMMAND_INIT]}"
+            "${_BL_CONST[INIT_OPTION_H]}"|"${_BL_CONST[INIT_LONG_OPTION_HELP]}")
+                bl-help "${_BL_CONST[INIT_COMMAND]}"
                 return 0
                 ;;
             -*)
-                _bl_log "USAGE_BAD_OPTION" "$1"
+                bl_log "USAGE_BAD_OPTION" "$1"
                 return 1
                 ;;
             *)  
@@ -151,24 +151,24 @@ bl-init() {
     elif [[ "${#args[@]}" -eq 1 ]]; then
         local -r ENVIRONMENT=$(realpath -m -- "${args[0]}")
     else
-        _bl_log "USAGE_MANY_ARGS"
+        bl_log "USAGE_MANY_ARGS"
         return 1
     fi
-    _bl_assert_valid_dir "${_BL_CONST[COMMAND_INIT]}" "$ENVIRONMENT" || return 1
+    _bl_assert_valid_dir "${_BL_CONST[INIT_COMMAND]}" "$ENVIRONMENT" || return 1
 
     # Initialize environment
-    # _bl_cli_init "$ENVIRONMENT" && _bl_log "INFO_INIT" "$BL_PATH" || return $?
-    local -r BL_PATH="$ENVIRONMENT/${_BL_CONST[BL_DIR]}"
-    [[ ! -d "$BL_PATH" ]] || { _bl_log "FATAL_ALREADY_INIT" "$ENVIRONMENT"; return 1; }
+    # _bl_cli_init "$ENVIRONMENT" && bl_log "INFO_INIT" "$BL_PATH" || return $?
+    local -r BL_PATH="$ENVIRONMENT/${_BL_CONST[DIR_BL]}"
+    [[ ! -d "$BL_PATH" ]] || { bl_log "FATAL_ALREADY_INIT" "$ENVIRONMENT"; return 1; }
     
-    mkdir -p "$BL_PATH/${_BL_CONST[SOURCE_DIR]}"
-    echo "1" > "$BL_PATH/${_BL_CONST[MANIFEST_FILENAME]}"
-    touch "$BL_PATH/${_BL_CONST[SOURCE_DIR]}/${_BL_CONST[LOCAL_FILE]}" \
-          "$BL_PATH/${_BL_CONST[SOURCE_DIR]}/${_BL_CONST[SCOPED_FILE]}"
+    mkdir -p "$ENVIRONMENT/${_BL_CONST[DIR_SOURCE]}"
+    echo "1" > "$$ENVIRONMENT/${_BL_CONST[PATH_MANIFEST]}"
+    touch "$ENVIRONMENT/${_BL_CONST[PATH_SOURCE_LOCAL]}" \
+          "$ENVIRONMENT/${_BL_CONST[PATH_SOURCE_SCOPED]}"
 
-    echo "1" > "$BL_PATH/${_BL_CONST[MANIFEST_FILENAME]}"
+    echo "1" > "$ENVIRONMENT/${_BL_CONST[PATH_MANIFEST]}"
 
-    _bl_log "INFO_INIT" "$BL_PATH"
+    bl_log "INFO_INIT" "$BL_PATH"
 }
 
 # MARK: show
@@ -203,28 +203,28 @@ bl-add() {
     local -a args
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            "${_BL_CONST[OPTION_ADD_H]}"|"${_BL_CONST[LONG_OPTION_ADD_HELP]}")
-                bl-help "${_BL_CONST[COMMAND_ADD]}"
+            "${_BL_CONST[ADD_OPTION_H]}"|"${_BL_CONST[ADD_LONG_OPTION_HELP]}")
+                bl-help "${_BL_CONST[ADD_COMMAND]}"
                 return 0
                 ;;
             # Directory
-            "${_BL_CONST[OPTION_ADD_C]}"|"${_BL_CONST[LONG_OPTION_ADD_CWD]}"|\
-            "${_BL_CONST[OPTION_ADD_D]}"|"${_BL_CONST[LONG_OPTION_ADD_DIR]}")
+            "${_BL_CONST[ADD_OPTION_C]}"|"${_BL_CONST[ADD_LONG_OPTION_CWD]}"|\
+            "${_BL_CONST[ADD_OPTION_D]}"|"${_BL_CONST[ADD_LONG_OPTION_DIR]}")
                 environment=$(realpath -m -- "$2")
                 shift
                 ;;
-            "${_BL_CONST[OPTION_ADD_C]}"=*|"${_BL_CONST[LONG_OPTION_ADD_CWD]}"=*|\
-            "${_BL_CONST[OPTION_ADD_D]}"=*|"${_BL_CONST[LONG_OPTION_ADD_DIR]}"=*)
+            "${_BL_CONST[ADD_OPTION_C]}"=*|"${_BL_CONST[ADD_LONG_OPTION_CWD]}"=*|\
+            "${_BL_CONST[ADD_OPTION_D]}"=*|"${_BL_CONST[ADD_LONG_OPTION_DIR]}"=*)
                 environment=$(realpath -m -- "${1#*=}")
                 ;;
-            "${_BL_CONST[OPTION_ADD_C]}"*|"${_BL_CONST[OPTION_ADD_D]}"*)
+            "${_BL_CONST[ADD_OPTION_C]}"*|"${_BL_CONST[ADD_OPTION_D]}"*)
                 environment=$(realpath -m -- "${1:2}")
                 ;;
             # Other options
-            "${_BL_CONST[LONG_OPTION_ADD_INIT]}") ;;
-            "${_BL_CONST[OPTION_ADD_F]}"|"${_BL_CONST[LONG_OPTION_ADD_FORCE]}") ;;
+            "${_BL_CONST[ADD_LONG_OPTION_INIT]}") ;;
+            "${_BL_CONST[ADD_OPTION_F]}"|"${_BL_CONST[ADD_LONG_OPTION_FORCE]}") ;;
             -*)
-                _bl_log "USAGE_BAD_OPTION" "$1"
+                bl_log "USAGE_BAD_OPTION" "$1"
                 return 1
                 ;;
             *)
@@ -300,7 +300,7 @@ bl-config() {
 # MARK: version
 bl-version() {
 
-    [[ -n "${_BL_CONST[VERSION]:-}" ]] || { _bl_log "FATAL_NO_VERSION"; return 1; }
+    [[ -n "${_BL_CONST[VERSION]:-}" ]] || { bl_log "FATAL_NO_VERSION"; return 1; }
     
     echo -e "bl version ${_BL_CONST[VERSION]}"
 }
@@ -309,7 +309,20 @@ bl-version() {
 bl-help() {
 
     if [[ $# -lt 1 ]]; then
-        _bl_log "HELP"
+
+        local -r usage="usage: bl [-v | --version] [-h | --help] <command> [<args>]"
+        local -r commands=$(
+            {
+                echo "  init:Initialize a new environment"
+                echo "  add:Add aliases, functions and/or variables to an environment"
+                echo "  rm:Remove elements from an environment"
+            } | column -t -s ':'
+        )
+        echo "$usage"
+        echo
+        echo "These are common bl commands:"
+        echo
+        echo "$commands"
         return 0
     fi
 
