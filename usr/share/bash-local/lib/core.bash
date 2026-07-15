@@ -119,7 +119,7 @@ _bl_core_refresh_current_environments_state() {
 
         # Store if has a `bl` directory and remove the last segment (e.g. 
         # remove `/segment` from `$HOME/segment`)
-        if [[ -d "$dir/${_BL_CONST[BL_DIR]}" ]]; then
+        if [[ -d "$dir/${_BL_CONST[DIR_BL]}" ]]; then
             _BL_STATE_CURRENT_ENVIRONMENTS+=("$dir")
         fi
         dir=${dir%/*}
@@ -352,14 +352,12 @@ _bl_core_get_source_files() {
     local -r COLLECT_SCOPED_FILE="$3"
     local -n files__=$4
 
-    local -r BL_PATH="$ENVIRONMENT/${_BL_CONST[BL_DIR]}/"
-
     if [[ "$COLLECT_LOCAL_FILE" == true ]]; then
-        files__+=("$BL_PATH/${_BL_CONST[SOURCE_DIR]}/${_BL_CONST[LOCAL_FILENAME]}")
+        files__+=("$ENVIRONMENT/${_BL_CONST[PATH_SOURCE_LOCAL]}")
     fi
 
     if [[ "$COLLECT_SCOPED_FILE" == true ]]; then
-        files__+=("$BL_PATH/${_BL_CONST[SOURCE_DIR]}/${_BL_CONST[SCOPED_FILENAME]}")
+        files__+=("$ENVIRONMENT/${_BL_CONST[PATH_SOURCE_SCOPED]}")
     fi
 }
 
