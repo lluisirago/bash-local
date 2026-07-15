@@ -47,7 +47,7 @@ _bl_manifest_collect_traits_by_name() {
     # Map manifest into MANIFEST_LINES array
     local -a MANIFEST_LINES
     mapfile -t MANIFEST_LINES < \
-        "$ENVIRONMENT/${_BL_CONST[BL_DIR]}/${_BL_CONST[MANIFEST_FILENAME]}"
+        "$ENVIRONMENT/${_BL_CONST[PATH_MANIFEST]}"
     
     # Turn MANIFEST_LINES array into map for faster lookup
     local -A elements
@@ -104,7 +104,7 @@ _bl_manifest_collect_names_by_scope() {
     # Map manifest into MANIFEST_LINES array
     local -a MANIFEST_LINES
     mapfile -t MANIFEST_LINES < \
-        "$ENVIRONMENT/${_BL_CONST[BL_DIR]}/${_BL_CONST[MANIFEST_FILENAME]}"
+        "$ENVIRONMENT/${_BL_CONST[PATH_MANIFEST]}"
 
     local -r SCOPED_OFFSET="${MANIFEST_LINES[0]}"
 
@@ -121,9 +121,9 @@ _bl_manifest_collect_names_by_scope() {
         read -r name scope kind first last <<< "${MANIFEST_LINES[i]}"
 
         case "$kind" in
-            "${_BL_CONST[KIND_ALIAS]}") aliases__+=("$name");;
-            "${_BL_CONST[KIND_FUNCTION]}") functions__+=("$name");;
-            "${_BL_CONST[KIND_VARIABLE]}") variables__+=("$name");;
+            "${_BL_CONST[MANIFEST_SCHEMA_KIND_ALIAS]}") aliases__+=("$name");;
+            "${_BL_CONST[MANIFEST_SCHEMA_KIND_FUNCTION]}") functions__+=("$name");;
+            "${_BL_CONST[MANIFEST_SCHEMA_KIND_VARIABLE]}") variables__+=("$name");;
         esac
     done
 }
@@ -172,7 +172,7 @@ _bl_manifest_append_by_traits() {
     # Map manifest into MANIFEST_LINES array
     local -a MANIFEST_LINES
     mapfile -t MANIFEST_LINES < \
-        "$ENVIRONMENT/${_BL_CONST[BL_DIR]}/${_BL_CONST[MANIFEST_FILENAME]}"
+        "$ENVIRONMENT/${_BL_CONST[PATH_MANIFEST]}"
 
     # starts and ends should be ordered
     for (( pos = 0; pos < ${#NAMES[@]}; pos++ )); do
@@ -188,7 +188,7 @@ _bl_manifest_append_by_traits() {
             "${STARTS[pos]}" \
             "${ENDS[pos]}"
 
-        if [[ "${SCOPES[pos]}" == "${_BL_CONST[SCOPE_LOCAL]}" ]]; then
+        if [[ "${SCOPES[pos]}" == "${_BL_CONST[MANIFEST_SCHEMA_SCOPE_LOCAL]}" ]]; then
 
             # Move elements one position right
             for (( _i_ = ${#MANIFEST_LINES[@]}; _i_ > scoped_offset; _i_-- )); do
@@ -199,7 +199,7 @@ _bl_manifest_append_by_traits() {
             MANIFEST_LINES[scoped_offset]="$element_line"
             MANIFEST_LINES[0]="$(( scoped_offset+1 ))"
 
-        elif [[ "${SCOPES[pos]}" == "${_BL_CONST[SCOPE_SCOPED]}" ]]; then
+        elif [[ "${SCOPES[pos]}" == "${_BL_CONST[MANIFEST_SCHEMA_SCOPE_SCOPED]}" ]]; then
             MANIFEST_LINES+=("$element_line")
         fi
     done
@@ -208,7 +208,7 @@ _bl_manifest_append_by_traits() {
     local tmp
     tmp="$(mktemp)" || return 2
     printf '%s\n' "${MANIFEST_LINES[@]}" > "$tmp"
-    mv "$tmp" "$ENVIRONMENT/${_BL_CONST[BL_DIR]}/${_BL_CONST[MANIFEST_FILENAME]}"
+    mv "$tmp" "$ENVIRONMENT/${_BL_CONST[PATH_MANIFEST]}"
 }
 
 
@@ -243,7 +243,7 @@ _bl_manifest_remove_by_lines() {
     # Map manifest into MANIFEST_LINES array
     local -a MANIFEST_LINES
     mapfile -t MANIFEST_LINES < \
-        "$ENVIRONMENT/${_BL_CONST[BL_DIR]}/${_BL_CONST[MANIFEST_FILENAME]}"
+        "$ENVIRONMENT/${_BL_CONST[PATH_MANIFEST]}"
 
     local i
     for (( i = 0; i < ${#NAMES[@]}; i++ )); do
@@ -269,5 +269,5 @@ _bl_manifest_remove_by_lines() {
     local tmp
     tmp="$(mktemp)" || return 2
     printf '%s\n' "${MANIFEST_LINES[@]}" > "$tmp"
-    mv "$tmp" "$ENVIRONMENT/${_BL_CONST[BL_DIR]}/${_BL_CONST[MANIFEST_FILENAME]}"
+    mv "$tmp" "$ENVIRONMENT/${_BL_CONST[PATH_MANIFEST]}"
 }
