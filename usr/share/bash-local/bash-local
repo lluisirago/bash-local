@@ -18,8 +18,9 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/cli.bash"
 # This function is executed on every terminal session start.
 #
 # @noargs
-_bl_start() {
+bl_start() {
 
-    _bl_config_load || return 1
+    bl_config_load || return 1
+    bl_log_init || return 1
 }
-_bl_start
+bl_start
