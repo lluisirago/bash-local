@@ -8,58 +8,162 @@
 #
 # ---
 #
-# Log types:
+# Log levels:
 #
-# | Type | Trigger | Color |
+# | Level | Trigger | Color |
 # |------|--------|-------|
-# | debug | Internal information written in log file (in terminal when debug is
-# enabled) | Yellow |
 # | error | Error that does not impede execution | Red |
 # | fatal | Error that impedes execution | - |
 # | info | State changes | - |
 # | usage | Bad CLI usage | - |
 
-_bl_log_init() {
+# MARK: Public
+# -----------------------------------------------------------------------------
+# @section Public funtions
+#
+# Functions in this section manage logs and are intended to be called by other
+# modules.
 
-    local -r LOG_FILE="${_BL_CONST[LOG_DIR]}/${_BL_CONST[LOG_FILENAME]}"
+# @description Clears and loads all settings, then configures colors.
+#
+# @noargs
+#
+# @exitcode 0 Success.
+# @exitcode 1 Internal error.
+bl_log_init() {
 
-    mkdir -p "${_BL_CONST[LOG_DIR]}" 2>/dev/null
-    touch "$LOG_FILE" 2>/dev/null
+    _bl_log_touch || return 1
+    _bl_log_configure_color || return 1
+}
 
-    if [[ -f "$LOG_FILE" ]]; then
+# @description Logs any of the supported messages.
+# 
+# Each log is determined by a code defined in `_bl_log_translate`.
+#
+# @arg $1 string Log code.
+# @arg $2 string First object to refer to (optional).
+# @arg $3 string Second object to refer to (optional).
+#
+# @exitcode 0 Success.
+# @exitcode 1 Emission failed.
+bl_log() {
 
-        local -r SIZE=$(wc -c <"$LOG_FILE" 2>/dev/null || echo 0)
-        if (( SIZE > _BL_CONST[MAX_LOG_FILE_SIZE])); then
+    local -r CODE="$1"
+
+    local message level
+    level="${CODE%%_*}"
+    level="${level,,}"
+    
+    _bl_log_translate "$CODE" message "$2" "$3" || level="error"
+    _bl_log_emit "$level" "$message" || return 1
+}
+
+# @description Logs any of the supported debug messages.
+# 
+# Each log is determined by a code defined in `_bl_log_debug_translate`.
+#
+# @arg $1 string Log code.
+# @arg $2 string First object to refer to (optional).
+# @arg $3 string Second object to refer to (optional).
+#
+# @exitcode 0 Success.
+# @exitcode 1 Emission failed.
+bl_log_debug() {
+
+    local -r CODE="$1"
+
+    local message level
+    level="${CODE%%_*}"
+    level="${level,,}"
+    
+    _bl_log_debug_translate "$CODE" message "$2" "$3" || level="error"
+    _bl_log_debug_emit "$level" "$message" || return 1
+}
+
+# MARK: Log file
+# -----------------------------------------------------------------------------
+# @section Log file manager
+#
+# Functions in this section manage log file.
+
+# @description Touches log file, rotates it if exceeds max size (1MB) and
+# deletes +30 days old files.
+#
+# Log file is created if does not exist.
+#
+# Side effects:
+# - Reads `_BL_CONST`.
+# - Touches, rotates or deletes log files in `_BL_CONST[DIR_LOG]`.
+# - Logs FATAL if any external command fails.
+#
+# @noargs
+#
+# @exitcode 0 Success.
+# @exitcode 1 Internal error.
+_bl_log_touch() {
+
+    local -r FILE="${_BL_CONST[PATH_LOG]}"
+
+    bl_run_external mkdir -p "${_BL_CONST[DIR_LOG]}" || return 1
+    bl_run_external touch "$FILE" || return 1
+
+    if [[ -f "$FILE" ]]; then
+
+        local -r SIZE=$(wc -c <"$FILE" 2>/dev/null || echo 0)
+        if (( SIZE > _BL_CONST[LOG_INIT_MAX_SIZE])); then
 
             # Rotate log file
             local -r TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
-            local -r OLD_LOG_FILE="${_BL_CONST[LOG_DIR]}/bl-${TIMESTAMP}.log"
+            local -r OLD_FILE="${_BL_CONST[DIR_LOG]}/bl-${TIMESTAMP}.log"
 
-            mv "$LOG_FILE" "$OLD_LOG_FILE" 2>/dev/null
-            touch "$LOG_FILE" 2>/dev/null
+            bl_run_external mv "$FILE" "$OLD_FILE" || return 1
+            bl_run_external touch "$FILE" || return 1
 
             # Delete +30 days old files
-            find "${_BL_CONST[LOG_DIR]}" -name "bl-*.log" -type f \
-                 -mtime +30 -delete 2>/dev/null
+            bl_run_external find "${_BL_CONST[DIR_LOG]}" -name "bl-*.log" \
+                -type f -mtime +30 -delete || return 1
         fi
     fi
 }
-_bl_log_init
 
-
-
+# @description Writes entry in log file with the following format:
+# [<timestamp>] [<PID>] [<level>] <message>
+#
+# Using strftime format for timestamp (%Y-%m-%d %H:%M:%S).
+#
+# Log file is created if does not exist.
+#
+# Side effects:
+# - Writes in log file.
+# - Logs FATAL_MISSING_VARIABLE if `_BL_CONST[PATH_LOG]` is undefined or
+#   empty.
+# - Logs FATAL_NO_PERM if cannot write `_BL_CONST[PATH_LOG].
+#
+# @arg $1 Level of severity.
+# @arg $2 Message to write.
+#
+# @exitcode 0 Success.
+# @exitcode 1 `_BL_CONST[PATH_LOG]` undefined or empty.
+# @exitcode 2 Log file does not have writing permissions.
 _bl_log_write() {
 
     local -r LEVEL="$1"
     local -r MESSAGE="$2"
+
     local -r TIMESTAMP=$(date +"%Y-%m-%d %H:%M:%S")
     local -r PID=$$
 
-    local -r LOG_FILE="${_BL_CONST[LOG_DIR]}/${_BL_CONST[LOG_FILENAME]}"
-
-    if [[ -n "${LOG_FILE:-}" && -w "$LOG_FILE" ]]; then
-        echo "[$TIMESTAMP] [$PID] [$LEVEL] $MESSAGE" >> "$LOG_FILE"
+    if ! [[ -n "${_BL_CONST[PATH_LOG]:-}" ]]; then
+        bl_log_debug "FATAL_MISSING_VARIABLE" "_BL_CONST[PATH_LOG]"
+        return 1
+    elif ! [[ -w "${_BL_CONST[PATH_LOG]}" ]]; then
+        bl_log "FATAL_NO_PERM" "${_BL_CONST[PATH_LOG]}"
+        return 2
     fi
+    
+    printf '[%s] [%s] [%s] %s\n' \
+        "$TIMESTAMP" "$PID" "$LEVEL" "$MESSAGE" \
+        >> "${_BL_CONST[PATH_LOG]}"
 }
 
 
@@ -67,129 +171,128 @@ _bl_log_write() {
 # -----------------------------------------------------------------------------
 # @section CLI logging
 #
-# Functions in this section logs user-facing messages.
+# Functions in this section log user-facing messages.
 
-# @description Logs any of the supported messages.
-# 
-# Each log is determined by a code.
+# @description Translates log code into message.
 #
-# @arg $1 string Log code
-# @arg $2 string First object to refer to (optional)
-# @arg $3 string Second objecto to refer to (optional)
+# If code is unknown, message returned is "unknown log code: <CODE>".
 #
-# @see Used in [cli.bash](./cli.md)
-_bl_log() {
+# @arg $1 string Code.
+# @arg $2 string Reference to message.
+# @arg $3 string First object to refer to (optional).
+# @arg $4 string Second object to refer to (optional).
+#
+# @exitcode 0 Code is supported.
+# @exitcode 1 Unknown code.
+_bl_log_translate() {
 
-    local code="$1"
+    local -r CODE="$1"
+    local -n message_=$2
 
-    case "$code" in
+    case "$CODE" in
 
         # Error
         "ERROR_IS_DIR")
-            _bl_log_error \
-                "$2: is a directory"
+            message_="$3: is a directory"
             ;;
         "ERROR_NO_FILE")
-            _bl_log_error \
-                "$2: no such file"
+            message_="$3: no such file"
             ;;
 
         # Fatal
-        "FATAL_ALREADY_INIT")       _bl_log_fatal "$2: already initialized";;
-        "FATAL_NOT_A_DIR")          _bl_log_fatal "$2: not a directory";;
-        "FATAL_NO_CONFIG_FILE")          _bl_log_fatal "${_BL_CONST[CONFIG_FILE]}: no such file";;
-        "FATAL_NO_DIR")             _bl_log_fatal "missing directory after '$2'";;
-        "FATAL_NO_PERM_CONFIG_FILE")     _bl_log_fatal "${_BL_CONST[CONFIG_FILE]}: permission denied";;
-        "FATAL_NO_VERSION")         _bl_log_fatal "bl version not declared";;
-        "FATAL_OUT_HOME")           _bl_log_fatal "$2: not within '$HOME'";;
+        "FATAL_ALREADY_INIT") message_="$3: already initialized";;
+        "FATAL_NOT_A_DIR") message_="$3: not a directory";;
+        "FATAL_UNEVEN_ARRAYS") message_="given arrays have different size";;
+        "FATAL_NO_FILE") message_="$3: no such file";;
+        "FATAL_NO_DIR") message_="missing directory after '$3'";;
+        "FATAL_NO_PERM") message_="$3: permission denied";;
+        "FATAL_NO_VERSION") message_="bl version not declared";;
+        "FATAL_OUT_HOME") message_="$3: not within '$HOME'";;
         
         # Info
-        "INFO_INIT") _bl_log_info "Initialized empty environment in '$2'";;
+        "INFO_INIT") message_="Initialized empty environment in '$3'";;
 
         # Usage
-        "USAGE_MANY_ARGS")   _bl_log_usage "too many arguments";;
-        "USAGE_BAD_OPTION")  _bl_log_usage "unknown option: $2";;
-        "USAGE_BAD_COMMAND") _bl_log_usage "$2: not a bl command";;
-
-        # Others
-        "USAGE")
-            echo "usage: bl [-v | --version] [-h | --help] <command> [<args>]"
-            ;;
-        "COMMANDS_LIST")
-            {
-                echo "  init:Initialize a new environment";
-                echo "  add:Add aliases, functions and/or variables to an environment";
-                echo "  rm:Remove elements from an environment"
-            } | column -t -s ':'
-            ;;
-        "HELP")
-            _bl_log "USAGE"
-            echo ""
-            echo "These are common bl commands:"
-            echo ""
-            _bl_log "COMMANDS_LIST"
-            ;;
+        "USAGE_MANY_ARGS") message_="too many arguments";;
+        "USAGE_BAD_OPTION") message_="unknown option: $3";;
+        "USAGE_BAD_COMMAND") message_="$3: not a bl command";;
 
         # Default
-        *) _bl_log_error "unknown error: $*";;
+        *)
+            message_="unknown log code: $CODE"
+            return 1
+            ;;
     esac
 }
 
-# @description Logs an error, writing the given message in log file and
-# printing it to stderr. If terminal supports color, the message will be red.
+# @description Writes a message to log file and terminal.
 #
-# Side effects:
-# - Writes in log file
-# - Writes to stderr
+# @arg $1 string Level.
+# @arg $2 string Message.
 #
-# @see Used in [_bl_log](#_bl_log)
-_bl_log_error() {
+# @exitcode 0 Success.
+# @exitcode 1 Internal error.
+_bl_log_emit() {
 
-    _bl_log_write "error" "$1"
-    echo -e "${_BL_CONST[COLOR_RED]}error: $1${_BL_CONST[COLOR_RESET]}" >&2
+    local -r LEVEL="$1"
+    local -r MESSAGE="$2"
+
+    _bl_log_write "$LEVEL" "$MESSAGE"
+        
+    local color_mode color color_reset
+    bl_config_resolve "color" color_mode || return 1
+    _bl_log_get_color "$color_mode" "$LEVEL" color color_reset
+    _bl_log_print \
+        "$color" "$color_reset" "$LEVEL" "$MESSAGE" || return 1
 }
 
-# @description Logs a fatal error, writing the given message in log file and
-# printing it to stderr.
+# @description Prints debug message.
+#
+# Formats:
+# - info: <message>
+# - usage: <CLI function>: <message>
+#          Try '--help' for more information.
+# - other levels: <level>: <message>
 #
 # Side effects:
-# - Writes in log file
-# - Writes to stderr
+# - Writes in terminal.
 #
-# @see Used in [_bl_log](#_bl_log)
-_bl_log_fatal() {
+# @arg $1 string Color ANSI escape sequence.
+# @arg $2 string Color reset ANSI escape sequence.
+# @arg $3 string Level.
+# @arg $4 string Message.
+#
+# @exitcode 0 Success.
+# @exitcode 1 `_BL_CONST[LOG_LEVEL_INFO]` is not defined.
+# @exitcode 2 `_BL_CONST[LOG_LEVEL_USAGE]` is not defined.
+_bl_log_print() {
+
+    local -r COLOR="$1"
+    local -r COLOR_RESET="$2"
+    local -r LEVEL="$3"
+    local -r MESSAGE="$4"
     
-    _bl_log_write "fatal" "$1"
-    echo -e "fatal: $1" >&2
-}
+    if ! [[ -v _BL_CONST[LOG_LEVEL_INFO] ]]; then
+        bl_log_debug "FATAL_MISSING_VARIABLE" "_BL_CONST[LOG_LEVEL_INFO]"
+        return 1
+    elif ! [[ -v _BL_CONST[LOG_LEVEL_USAGE] ]]; then
+        bl_log_debug "FATAL_MISSING_VARIABLE" "_BL_CONST[LOG_LEVEL_USAGE]"
+        return 2
+    fi
 
-# @description Logs information for state changes, writing the given message in
-# log file and printing it to stderr.
-#
-# Side effects:
-# - Writes in log file
-# - Writes to stderr
-#
-# @see Used in [_bl_log](#_bl_log)
-_bl_log_info() {
+    if [[ $LEVEL == "${_BL_CONST[LOG_LEVEL_INFO]}" ]]; then
+        
+        printf '%b%s%b\n' \
+            "$COLOR" "$MESSAGE" "$COLOR_RESET" >&2
+            
+    elif [[ $LEVEL == "${_BL_CONST[LOG_LEVEL_USAGE]}" ]]; then
 
-    _bl_log_write "info" "$1"
-    echo -e "$1" >&2
-}
-
-# @description Logs information for correct CLI usage, writing the given message
-# in log file and printing it to stderr.
-#
-# Side effects:
-# - Writes in log file
-# - Writes to stderr
-#
-# @see Used in [_bl_log](#_bl_log)
-_bl_log_usage() {
-
-    _bl_log_write "usage" "$1"
-    echo -e "bl: $1" >&2
-    echo -e "Try '--help' for more information." >&2
+        printf "%b%s: %s\nTry '--help' for more information.%b\n" \
+            "$COLOR" "${FUNCNAME[-1]}" "$MESSAGE" "$COLOR_RESET" >&2
+    else
+        printf '%b%s: %s%b\n' \
+            "$COLOR" "$LEVEL" "$MESSAGE" "$COLOR_RESET" >&2
+    fi
 }
 
 
@@ -197,62 +300,246 @@ _bl_log_usage() {
 # -----------------------------------------------------------------------------
 # @section Debug logging
 #
-# Functions in this section logs developer-facing messages.
+# Functions in this section log developer-facing messages.
 
-# @description Logs any of the supported debug messages.
-# 
-# Each log is determined by a code.
+# @description Translates log code into message.
 #
-# @arg $1 string Log code
-# @arg $2 string First object to refer to (optional)
-# @arg $3 string Second object to refer to (optional)
-_bl_log_debug() {
+# If code is unknown, message returned is "unknown log code: <CODE>".
+#
+# @arg $1 string Code.
+# @arg $2 string Reference to message.
+# @arg $3 string First object to refer to (optional).
+# @arg $4 string Second object to refer to (optional).
+#
+# @exitcode 0 Code is supported.
+# @exitcode 1 Unknown code.
+_bl_log_debug_translate() {
 
-    local code="$1"
+    local -r CODE="$1"
+    local -n message_=$2
 
-    case "$code" in
+    case "$CODE" in
 
         # Error
-        "ERROR_CONFIG_FILE_BAD_FORMAT")
-            _bl_log_debug_error  \
-                "${_BL_CONST[CONFIG_FILE]}: $2: invalid format"
+        "ERROR_CONFIG_PARSE_BAD_FORMAT")
+            message_="$3: invalid format"
             ;;
-        "ERROR_CONFIG_FILE_BAD_KEY")
-            _bl_log_debug_error \
-                "${_BL_CONST[CONFIG_FILE]}: $2: unknown setting"
+        "ERROR_CONFIG_VALIDATE_BAD_KEY")
+            message_="key '$3' not found"
             ;;
-        "ERROR_CONFIG_FILE_BAD_VALUE")
-            _bl_log_debug_error \
-                "${_BL_CONST[CONFIG_FILE]}: invalid value '$2' for '$3'"
+        "ERROR_CONFIG_VALIDATE_BAD_VALUE")
+            message_="invalid value '$3' for '$4'"
             ;;
 
         # Fatal
-        "FATAL_UNEVEN_ARRAYS")
-            _bl_log_debug_fatal \
-                "$2: given arrays have different size"
+        "FATAL_EXTERNAL")
+            message_="$3"
             ;;
-        "FATAL_UNDEFINED_VARIABLE")
-            _bl_log_debug_fatal \
-                "$2: undefined variable"
+        "FATAL_MISSING_VARIABLE")
+            message_="required variable '$3' is not defined or is empty"
+            ;;
+        "FATAL_UNEVEN_ARRAYS")
+            message_="given arrays have different size"
             ;;
 
         # Default
-        *) _bl_log_debug_error "unknown error: $*";;
+        *)
+            message_="unknown log code: $CODE"
+            return 1
+            ;;
     esac
 }
 
-_bl_log_debug_error() {
+# @description Writes a debug message to log file and terminal when appropriate.
+#
+# @arg $1 string Level.
+# @arg $2 string Message.
+#
+# @exitcode 0 Success.
+# @exitcode 1 Internal error.
+_bl_log_debug_emit() {
 
-    _bl_log_write "error" "$1"
-    # Añadir lógica para variable DEBUG activada
-    echo -e "${_BL_CONST[COLOR_RED]}[DEBUG] error: $1${_BL_CONST[COLOR_RESET]}" >&2
+    local -r LEVEL="$1"
+    local -r MESSAGE="$2"
+
+    local call_path
+    _bl_log_get_call_path call_path
+    _bl_log_write "$LEVEL" "$call_path: $MESSAGE"
     
+    local debug
+    bl_config_resolve "debug" debug || return 1
+    
+    if $debug; then
+        
+        local color_mode color color_reset
+        bl_config_resolve "color" color_mode || return 1
+        _bl_log_get_color "$color_mode" "$LEVEL" color color_reset
+        _bl_log_debug_print \
+            "$color" "$color_reset" "$call_path" "$LEVEL" "$MESSAGE" || return 1
+    fi
 }
 
-_bl_log_debug_fatal() {
+# @description Prints debug message.
+#
+# Formats:
+# - info and usage levels: [DEBUG] <call path>: <message>
+# - other levels: [DEBUG] <call path>: <level>: <message>
+#
+# Side effects:
+# - Writes in terminal.
+#
+# @arg $1 string Color ANSI escape sequence.
+# @arg $2 string Color reset ANSI escape sequence.
+# @arg $3 string Call path.
+# @arg $4 string Level.
+# @arg $5 string Message.
+#
+# @exitcode 0 Success.
+# @exitcode 1 `_BL_CONST[LOG_LEVEL_INFO]` is not defined.
+# @exitcode 2 `_BL_CONST[LOG_LEVEL_USAGE]` is not defined.
+_bl_log_debug_print() {
 
-    _bl_log_write "fatal" "$1"
-    # Añadir lógica para variable DEBUG activada
-    echo -e "[DEBUG] fatal: $1" >&2
+    local -r COLOR="$1"
+    local -r COLOR_RESET="$2"
+    local -r CALL_PATH="$3"
+    local -r LEVEL="$4"
+    local -r MESSAGE="$5"
     
+    if ! [[ -v _BL_CONST[LOG_LEVEL_INFO] ]]; then
+        bl_log_debug "FATAL_MISSING_VARIABLE" "_BL_CONST[LOG_LEVEL_INFO]"
+        return 1
+    elif ! [[ -v _BL_CONST[LOG_LEVEL_USAGE] ]]; then
+        bl_log_debug "FATAL_MISSING_VARIABLE" "_BL_CONST[LOG_LEVEL_USAGE]"
+        return 2
+    fi
+
+    if [[ $LEVEL == "${_BL_CONST[LOG_LEVEL_INFO]}" ||
+          $LEVEL == "${_BL_CONST[LOG_LEVEL_USAGE]}" ]]; then
+        
+        printf '%b[DEBUG] %s: %s%b\n' \
+            "$COLOR" "$CALL_PATH" "$MESSAGE" "$COLOR_RESET" >&2
+    else
+        printf '%b[DEBUG] %s: %s: %s%b\n' \
+            "$COLOR" "$CALL_PATH" "$LEVEL" "$MESSAGE" "$COLOR_RESET" >&2
+    fi
+}
+
+
+# MARK: Auxiliar
+# -----------------------------------------------------------------------------
+# @section Auxiliar functions
+#
+# Functions in this section implement additional functionality for the logging
+# functions above.
+
+# @description Sets `_BL_STATE[SUPPORTS_COLOR]` depending on if terminal
+# supports colors.
+#
+# Side effects:
+# - Reads `_BL_STATE`.
+#
+# @exitcode 0 Success.
+# @exitcode 1 `_BL_STATE[SUPPORTS_COLOR]` is not defined.
+_bl_log_configure_color() {
+
+    if ! [[ -v _BL_STATE[LOG_SUPPORTS_COLOR] ]]; then
+        bl_log_debug "FATAL_MISSING_VARIABLE" "_BL_STATE[LOG_SUPPORTS_COLOR]"
+        return 1
+    fi
+
+    if command -v tput >/dev/null &&
+        [ "$(tput colors 2>/dev/null || echo 0)" -ge 8 ]; then
+
+        _BL_STATE[LOG_SUPPORTS_COLOR]="true"
+    else
+        _BL_STATE[LOG_SUPPORTS_COLOR]="false"
+    fi
+}
+
+# @description Gets and formats call path for current log message.
+#
+# Skips current function and last two callers (logging module), so last function
+# shown is the one that invoked the logger.
+#
+# Call path format example: main->first_caller->second_caller
+#
+# @arg $1 string Reference to call path
+#
+# @exitcode 0 Success.
+_bl_log_get_call_path() {
+    
+    local -n call_path_=$1
+
+    call_path_=""
+    for ((i = ${#FUNCNAME[@]} - 1; i > 3; i--)); do
+        call_path_+="${FUNCNAME[i]}->"
+    done
+    call_path_+="${FUNCNAME[3]}"
+}
+
+# @description Gets both color and color reset according to color mode and log
+# level.
+#
+# Side effects:
+# - Reads `_BL_CONST`.
+#
+# @arg $1 string Color mode (lowercase).
+# @arg $2 string Log level (lowercase).
+# @arg $3 string Reference to color ANSI escape sequence.
+# @arg $4 string Reference to color reset ANSI escape sequence.
+#
+# @exitcode 0 Success.
+# @exitcode 1 `_BL_CONST[LOG_COLOR_<LEVEL>]` is not defined.
+# @exitcode 2 `_BL_CONST[LOG_COLOR_RESET]` is not defined.
+_bl_log_get_color() {
+
+    local -r COLOR_MODE="$1"
+    local -r MAYUS_LEVEL="${2^^}"
+    local -n out_color=$3
+    local -n out_color_reset=$4
+    
+    out_color=""
+    out_color_reset=""
+
+    _bl_log_use_color "$COLOR_MODE" || return 0
+
+    if ! [[ -v _BL_CONST[LOG_COLOR_"$MAYUS_LEVEL"] ]]; then
+        bl_log_debug "FATAL_MISSING_VARIABLE" "_BL_CONST[LOG_COLOR_$MAYUS_LEVEL]"
+        return 1
+    fi
+
+    if ! [[ -v _BL_CONST[LOG_COLOR_RESET] ]]; then
+        bl_log_debug "FATAL_MISSING_VARIABLE" "_BL_CONST[LOG_COLOR_RESET]"
+        return 2
+    fi
+
+    out_color="${_BL_CONST[LOG_COLOR_"$MAYUS_LEVEL"]}"
+    out_color_reset="${_BL_CONST[LOG_COLOR_RESET]}"
+}
+
+# @description Determines whether color output should be used with four checks:
+# - Terminal supports color.
+# - `stdout` is connected to terminal.
+# - `NO_COLOR` is not defined.
+# - Color mode is not "never".
+#
+# If color mode is "always", returns 0.
+#
+# Side effects:
+# - Reads `_BL_STATE`.
+#
+# @arg $1 Color mode (lowercase).
+#
+# @exitcode 0 Should use color.
+# @exitcode 1 Should not use it.
+_bl_log_use_color() {
+
+    local -r COLOR_MODE="$1"
+
+    [[ $COLOR_MODE == "always" ]] || (
+        ${_BL_STATE[LOG_SUPPORTS_COLOR]} &&
+        [[ -t 1 ]] &&
+        [[ -z ${NO_COLOR-} ]] &&
+        [[ $COLOR_MODE != "never" ]]
+    )
 }
