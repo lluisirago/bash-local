@@ -94,7 +94,6 @@ bl_log_debug() {
 # Side effects:
 # - Reads `_BL_CONST`.
 # - Touches, rotates or deletes log files in `_BL_CONST[DIR_LOG]`.
-# - Logs FATAL if any external command fails.
 #
 # @noargs
 #
@@ -135,9 +134,6 @@ _bl_log_touch() {
 #
 # Side effects:
 # - Writes in log file.
-# - Logs FATAL_MISSING_VARIABLE if `_BL_CONST[PATH_LOG]` is undefined or
-#   empty.
-# - Logs FATAL_NO_PERM if cannot write `_BL_CONST[PATH_LOG].
 #
 # @arg $1 Level of severity.
 # @arg $2 Message to write.
@@ -154,10 +150,10 @@ _bl_log_write() {
     local -r PID=$$
 
     if ! [[ -n "${_BL_CONST[PATH_LOG]:-}" ]]; then
-        bl_log_debug "FATAL_MISSING_VARIABLE" "_BL_CONST[PATH_LOG]"
+        _bl_log_internal_error "missing variable '_BL_CONST[PATH_LOG]'"
         return 1
     elif ! [[ -w "${_BL_CONST[PATH_LOG]}" ]]; then
-        bl_log "FATAL_NO_PERM" "${_BL_CONST[PATH_LOG]}"
+        _bl_log_internal_error "permission denied '${_BL_CONST[PATH_LOG]}'"
         return 2
     fi
     
@@ -273,10 +269,10 @@ _bl_log_print() {
     local -r MESSAGE="$4"
     
     if ! [[ -v _BL_CONST[LOG_LEVEL_INFO] ]]; then
-        bl_log_debug "FATAL_MISSING_VARIABLE" "_BL_CONST[LOG_LEVEL_INFO]"
+        _bl_log_internal_error "missing variable '_BL_CONST[LOG_LEVEL_INFO]'"
         return 1
     elif ! [[ -v _BL_CONST[LOG_LEVEL_USAGE] ]]; then
-        bl_log_debug "FATAL_MISSING_VARIABLE" "_BL_CONST[LOG_LEVEL_USAGE]"
+        _bl_log_internal_error "missing variable '_BL_CONST[LOG_LEVEL_USAGE]'"
         return 2
     fi
 
@@ -406,10 +402,10 @@ _bl_log_debug_print() {
     local -r MESSAGE="$5"
     
     if ! [[ -v _BL_CONST[LOG_LEVEL_INFO] ]]; then
-        bl_log_debug "FATAL_MISSING_VARIABLE" "_BL_CONST[LOG_LEVEL_INFO]"
+        _bl_log_internal_error "missing variable '_BL_CONST[LOG_LEVEL_INFO]'"
         return 1
     elif ! [[ -v _BL_CONST[LOG_LEVEL_USAGE] ]]; then
-        bl_log_debug "FATAL_MISSING_VARIABLE" "_BL_CONST[LOG_LEVEL_USAGE]"
+        _bl_log_internal_error "missing variable '_BL_CONST[LG_LEVEL_USAGE]'"
         return 2
     fi
 
@@ -443,7 +439,7 @@ _bl_log_debug_print() {
 _bl_log_configure_color() {
 
     if ! [[ -v _BL_STATE[LOG_SUPPORTS_COLOR] ]]; then
-        bl_log_debug "FATAL_MISSING_VARIABLE" "_BL_STATE[LOG_SUPPORTS_COLOR]"
+        _bl_log_internal_error "missing variable '_BL_CONST[LOG_SUPPORTS_COLOR]'"
         return 1
     fi
 
@@ -504,12 +500,12 @@ _bl_log_get_color() {
     _bl_log_use_color "$COLOR_MODE" || return 0
 
     if ! [[ -v _BL_CONST[LOG_COLOR_"$MAYUS_LEVEL"] ]]; then
-        bl_log_debug "FATAL_MISSING_VARIABLE" "_BL_CONST[LOG_COLOR_$MAYUS_LEVEL]"
+        _bl_log_internal_error "missing variable '_BL_CONST[LOG_COLOR_$MAYUS_LEVEL]'"
         return 1
     fi
 
     if ! [[ -v _BL_CONST[LOG_COLOR_RESET] ]]; then
-        bl_log_debug "FATAL_MISSING_VARIABLE" "_BL_CONST[LOG_COLOR_RESET]"
+        _bl_log_internal_error "missing variable '_BL_CONST[LOG_COLOR_RESET]'"
         return 2
     fi
 
@@ -542,4 +538,9 @@ _bl_log_use_color() {
         [[ -z ${NO_COLOR-} ]] &&
         [[ $COLOR_MODE != "never" ]]
     )
+}
+
+_bl_log_internal_error() {
+
+    printf 'error: %s: %s\n' "${FUNCNAME[1]}" "$1" >&2
 }

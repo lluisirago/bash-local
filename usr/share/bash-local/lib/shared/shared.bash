@@ -129,11 +129,11 @@ declare -gA _BL_STATE=(
 
     # Config state (default values)
     [CONFIG_COLOR]=auto
-    [CONFIG_DEBUG]=false
+    [CONFIG_DEBUG]=true
     [CONFIG_VERBOSE]=false
 
     # Log colors
-    [LOG_SUPPORTS_COLOR]="false"
+    [LOG_SUPPORTS_COLOR]=true
 
     # Option values
     [OPTION_COLOR]=""
