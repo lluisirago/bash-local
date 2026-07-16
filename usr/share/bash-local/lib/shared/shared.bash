@@ -160,6 +160,25 @@ bl_run_external() {
     fi
 }
 
+bl_atomic_write() {
+
+    local -rn LINES=$1
+    local -r FILE="$2"
+
+    local -r DIR=${FILE%/*}
+    local tmp
+    if ! tmp="$(mktemp "$DIR/.tmp.XXXXXX")"; then
+        bl_log_debug "FATAL_CREATE_TEMP" "$DIR"
+        return 1
+    fi
+    if ! printf '%s\n' "${LINES[@]}" > "$tmp"; then
+        bl_log_debug "FATAL_WRITE" "$tmp"
+        rm -f -- "$tmp"
+        return 2
+    fi  
+    bl_run_external mv -f -- "$tmp" "$FILE" || { rm -f -- "$tmp"; return 3; }
+}
+
 
 # MARK: Assert
 # -----------------------------------------------------------------------------
