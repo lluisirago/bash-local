@@ -287,8 +287,8 @@ bl-rm() {
     
     local -a names lines scopes kinds starts ends
     names+=("local_test0")
-    _bl_manifest_collect_traits_by_name "$PWD" names lines scopes kinds starts ends
-    _bl_manifest_remove_by_lines "$PWD" names lines
+    _bl_manifest_collect_traits_by_name "$PWD" names linenos scopes kinds starts ends
+    _bl_manifest_remove_by_lineno "$PWD" linenos
 }
 
 # MARK: config
