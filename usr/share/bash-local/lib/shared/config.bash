@@ -53,7 +53,7 @@ bl_config_load() {
 bl_config_clear() {
 
     if ! declare -p _BL_STATE &>/dev/null; then
-        bl_log_debug "FATAL_UNDEFINED_VARIABLE" "_BL_STATE"
+        bl_log_debug "FATAL_MISSING_VARIABLE" "_BL_STATE"
         return 1
     fi
 
@@ -123,7 +123,9 @@ bl_config_resolve() {
 # @arg $2 array Reference to values array.
 #
 # @exitcode 0 Parsing succeeded, but could have found invalid settings.
-# @exitcode 1 Config file does not exist or does not have reading permissions.
+# @exitcode 1 `_BL_CONST[PATH_CONFIG]` is not defined or is empty.
+# @exitcode 2 Config file does not exist.
+# @exitcode 3 Config file does not have reading permissions.
 _bl_config_parse() {
   
     local -n keys_=$1
@@ -134,10 +136,10 @@ _bl_config_parse() {
         return 1
     elif ! [[ -f "${_BL_CONST[PATH_CONFIG]}" ]]; then
         bl_log "FATAL_NO_FILE" "${_BL_CONST[PATH_CONFIG]}"
-        return 1
+        return 2
     elif ! [[ -r "${_BL_CONST[PATH_CONFIG]}" ]]; then
         bl_log "FATAL_NO_PERM" "${_BL_CONST[PATH_CONFIG]}"
-        return 1
+        return 3
     fi
 
     local lineno=0
@@ -191,7 +193,7 @@ _bl_config_filter() {
     [[ "${#keys_[@]}" -ne 0 ]] || return 0
 
     local -a aux_keys aux_values
-    local i
+    local -i i
     for (( i = 0; i < ${#keys_[@]}; i++ )); do
         
         if _bl_config_validate "${keys_[i]}" "${values_[i]}"; then
@@ -314,11 +316,11 @@ _bl_config_apply() {
     local -rn VALUES=$2
 
     if ! declare -p _BL_STATE &>/dev/null; then
-        bl_log_debug "FATAL_UNDEFINED_VARIABLE" "_BL_STATE"
+        bl_log_debug "FATAL_MISSING_VARIABLE" "_BL_STATE"
         return 1
     fi
 
-    local i
+    local -i i
     for (( i = 0; i < ${#KEYS[@]}; i++)); do
         _BL_STATE[CONFIG_"${KEYS[i]^^}"]="${VALUES[i]}"
     done
