@@ -328,14 +328,23 @@ _bl_log_debug_translate() {
             ;;
 
         # Fatal
+        "FATAL_CREATE_TEMP")
+            message_="failed to create temporary file in '$3'"
+            ;;
         "FATAL_EXTERNAL")
             message_="$3"
             ;;
         "FATAL_MISSING_VARIABLE")
             message_="required variable '$3' is not defined or is empty"
             ;;
+        "FATAL_READ")
+            message_="unable to read file '$3'"
+            ;;
         "FATAL_UNEVEN_ARRAYS")
             message_="given arrays have different size"
+            ;;
+        "FATAL_WRITE")
+            message_="unable to write file '$3'"
             ;;
 
         # Default
@@ -425,8 +434,8 @@ _bl_log_debug_print() {
 # -----------------------------------------------------------------------------
 # @section Auxiliar functions
 #
-# Functions in this section implement additional functionality for the logging
-# functions above.
+# Functions in this section implement additional functionality for the functions
+# above.
 
 # @description Sets `_BL_STATE[SUPPORTS_COLOR]` depending on if terminal
 # supports colors.
