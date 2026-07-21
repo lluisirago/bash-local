@@ -28,34 +28,19 @@ declare -gr _BL_SHARED_LOADED=1
 # - CLI options
 declare -gA _BL_CONST=(
 
-    # bl-add
-    [ADD_COMMAND]=add
-    [ADD_LONG_OPTION_HELP]=--help
-    [ADD_LONG_OPTION_CWD]=--cwd
-    [ADD_LONG_OPTION_DIR]=--dir
-    [ADD_LONG_OPTION_INIT]=--init
-    [ADD_LONG_OPTION_FORCE]=--force
-    [ADD_OPTION_H]=-h
-    [ADD_OPTION_C]=-C
-    [ADD_OPTION_D]=-d
-    [ADD_OPTION_F]=-f
-
-    # bl (command)
-    [BL_LONG_OPTION_HELP]=--help
-    [BL_LONG_OPTION_VERSION]=--version
-    [BL_OPTION_H]=-h
-    [BL_OPTION_V]=-v
+    # bl commands
+    [COMMAND_ADD]=add
+    [COMMAND_CONFIG]=config
+    [COMMAND_HELP]=help
+    [COMMAND_INIT]=init
+    [COMMAND_RM]=rm
+    [COMMAND_VERSION]=version
 
     # Config module
-    [CONFIG_COMMAND]=config
     [CONFIG_PARSE_REGEX]='^[[:space:]]*([[:alnum:]_-]+)[[:space:]]*=[[:space:]]*(.*)$'
     [CONFIG_SCHEMA_COLOR]=color
     [CONFIG_SCHEMA_DEBUG]=debug
     [CONFIG_SCHEMA_VERBOSE]=verbose
-    [CONFIG_TYPE_COLOR]=enum
-    [CONFIG_TYPE_DEBUG]=bool
-    [CONFIG_TYPE_VERBOSE]=bool
-    [CONFIG_ENUM_COLOR]="always auto never"
 
     # Directories
     [DIR_BL]=.bl/
@@ -68,14 +53,6 @@ declare -gA _BL_CONST=(
     [FILENAME_MANIFEST]=manifest
     [FILENAME_SOURCE_LOCAL]=local
     [FILENAME_SOURCE_SCOPED]=scoped
-
-    # bl-help
-    [HELP_COMMAND]=help
-
-    # bl-init
-    [INIT_COMMAND]=init
-    [INIT_LONG_OPTION_HELP]=--help
-    [INIT_OPTION_H]=-h
 
     # Log
     [LOG_COLOR_ERROR]='\033[0;31m' # Red
@@ -96,12 +73,40 @@ declare -gA _BL_CONST=(
     [MANIFEST_SCHEMA_SCOPE_LOCAL]=local
     [MANIFEST_SCHEMA_SCOPE_SCOPED]=scoped
 
-    # bl-rm
-    [RM_COMMAND]=rm
-    
+    # Settings module
+    [SETTING_DEFAULT_COLOR]=auto
+    [SETTING_DEFAULT_DEBUG]=true
+    [SETTING_DEFAULT_DIR]=./
+    [SETTING_DEFAULT_FORCE]=false
+    [SETTING_DEFAULT_HELP]=false
+    [SETTING_DEFAULT_INIT]=false
+    [SETTING_DEFAULT_VERBOSE]=false
+    [SETTING_DEFAULT_VERSION]=false
+
+    [SETTING_ENUM_COLOR]="always auto never"
+
+    [SETTING_OF_-C]=DIR
+    [SETTING_OF_-d]=DIR
+    [SETTING_OF_-f]=FORCE
+    [SETTING_OF_-h]=HELP
+    [SETTING_OF_-v]=VERSION
+    [SETTING_OF_--cwd]=DIR
+    [SETTING_OF_--dir]=DIR
+    [SETTING_OF_--help]=HELP
+    [SETTING_OF_--init]=INIT
+    [SETTING_OF_--version]=VERSION
+
+    [SETTING_TYPE_COLOR]=enum
+    [SETTING_TYPE_DEBUG]=bool
+    [SETTING_TYPE_DIR]=dir
+    [SETTING_TYPE_FORCE]=bool
+    [SETTING_TYPE_HELP]=bool
+    [SETTING_TYPE_INIT]=bool
+    [SETTING_TYPE_VERBOSE]=bool
+    [SETTING_TYPE_VERSION]=bool
+
     # bl-version
     [VERSION]=1.1.0
-    [VERSION_COMMAND]=version
 )
 
 ## Derived Constants
@@ -127,18 +132,23 @@ declare -gA _BL_STATE=(
 
     [PPD]=""
 
-    # Config state (default values)
-    [CONFIG_COLOR]=auto
-    [CONFIG_DEBUG]=true
-    [CONFIG_VERBOSE]=false
+    # CLI option settings
+    [OPTION_COLOR]=""
+    [OPTION_DIR]=""
+    [OPTION_DEBUG]=""
+    [OPTION_FORCE]=""
+    [OPTION_HELP]=""
+    [OPTION_INIT]=""
+    [OPTION_VERBOSE]=""
+    [OPTION_VERSION]=""
+
+    # Config settings
+    [CONFIG_COLOR]=""
+    [CONFIG_DEBUG]=""
+    [CONFIG_VERBOSE]=""
 
     # Log colors
     [LOG_SUPPORTS_COLOR]=true
-
-    # Option values
-    [OPTION_COLOR]=""
-    [OPTION_DEBUG]=""
-    [OPTION_VERBOSE]=""
 )
 declare -ga _BL_STATE_PREVIOUS_ENVIRONMENTS=()
 declare -ga _BL_STATE_CURRENT_ENVIRONMENTS=()
@@ -206,6 +216,7 @@ _bl_assert_valid_dir() {
 # MARK: Modules
 # -----------------------------------------------------------------------------
 # @section Source modules
+source "$(dirname "${BASH_SOURCE[0]}")/setting.bash"
 source "$(dirname "${BASH_SOURCE[0]}")/config.bash"
 source "$(dirname "${BASH_SOURCE[0]}")/log.bash"
 source "$(dirname "${BASH_SOURCE[0]}")/manifest.bash"
