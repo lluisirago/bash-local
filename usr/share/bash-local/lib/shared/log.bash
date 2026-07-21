@@ -196,22 +196,48 @@ _bl_log_translate() {
             ;;
 
         # Fatal
-        "FATAL_ALREADY_INIT") message_="$3: already initialized";;
-        "FATAL_NOT_A_DIR") message_="$3: not a directory";;
-        "FATAL_UNEVEN_ARRAYS") message_="given arrays have different size";;
-        "FATAL_NO_FILE") message_="$3: no such file";;
-        "FATAL_NO_DIR") message_="missing directory after '$3'";;
-        "FATAL_NO_PERM") message_="$3: permission denied";;
-        "FATAL_NO_VERSION") message_="bl version not declared";;
-        "FATAL_OUT_HOME") message_="$3: not within '$HOME'";;
+        "FATAL_ALREADY_INIT")
+            message_="$3: already initialized"
+            ;;
+        "FATAL_INVALID_ENUM")
+
+            local -r MAYUS_KEY="${_BL_CONST[SETTING_OF_$4]}"
+            local -r VALUES="${_BL_CONST[SETTING_ENUM_$MAYUS_KEY]// /, }"
+
+            local expected_values=""
+            [[ -n $VALUES ]] && expected_values=" (expected: $VALUES)"
+
+            message_="invalid value '$3' for option '$4'$expected_values"
+            ;;
+        "FATAL_NOT_A_DIR") 
+            message_="$3: not a directory"
+            ;;
+        "FATAL_NO_FILE")
+            message_="$3: no such file"
+            ;;
+        "FATAL_NO_DIR")
+            message_="missing directory after '$3'"
+            ;;
+        "FATAL_NO_PERM")
+            message_="$3: permission denied"
+            ;;
+        "FATAL_NO_VERSION")
+            message_="bl version not declared"
+            ;;
+        "FATAL_OUT_HOME")
+            message_="$3: not within '$HOME'"
+            ;;
+        "FATAL_UNEVEN_ARRAYS")
+            message_="given arrays have different size"
+            ;;
         
         # Info
         "INFO_INIT") message_="Initialized empty environment in '$3'";;
 
         # Usage
         "USAGE_MANY_ARGS") message_="too many arguments";;
-        "USAGE_BAD_OPTION") message_="unknown option: $3";;
-        "USAGE_BAD_COMMAND") message_="$3: not a bl command";;
+        "USAGE_INVALID_OPTION") message_="unknown option: $3";;
+        "USAGE_INVALID_COMMAND") message_="$3: not a bl command";;
 
         # Default
         *)
@@ -223,7 +249,7 @@ _bl_log_translate() {
 
 # @description Writes a message to log file and terminal.
 #
-# @arg $1 string Level.
+# @arg $1 string Level (lowercase).
 # @arg $2 string Message.
 #
 # @exitcode 0 Success.
@@ -236,7 +262,7 @@ _bl_log_emit() {
     _bl_log_write "$LEVEL" "$MESSAGE"
         
     local color_mode color color_reset
-    bl_config_resolve "color" color_mode || return 1
+    bl_setting_resolve "color" color_mode || return 1
     _bl_log_get_color "$color_mode" "$LEVEL" color color_reset
     _bl_log_print \
         "$color" "$color_reset" "$LEVEL" "$MESSAGE" || return 1
@@ -255,7 +281,7 @@ _bl_log_emit() {
 #
 # @arg $1 string Color ANSI escape sequence.
 # @arg $2 string Color reset ANSI escape sequence.
-# @arg $3 string Level.
+# @arg $3 string Level (lowercase).
 # @arg $4 string Message.
 #
 # @exitcode 0 Success.
@@ -317,17 +343,29 @@ _bl_log_debug_translate() {
     case "$CODE" in
 
         # Error
-        "ERROR_CONFIG_PARSE_BAD_FORMAT")
+        "ERROR_CONFIG_PARSE_INVALID_FORMAT")
             message_="$3: invalid format"
             ;;
-        "ERROR_CONFIG_VALIDATE_BAD_KEY")
+        "ERROR_CONFIG_FILTER_INVALID_VALUE")
+            message_="invalid value '$3' for '$4'"
+            ;;
+        #"ERROR_SETTING_VALIDATE_BAD_DEFAULT")
+        #    message_="invalid default value '$3' for '$4'"
+        #    ;;
+        "ERROR_SETTING_VALIDATE_INVALID_KEY")
             message_="key '$3' not found"
             ;;
-        "ERROR_CONFIG_VALIDATE_BAD_VALUE")
-            message_="invalid value '$3' for '$4'"
+        "ERROR_SETTING_VALIDATE_NOT_CONFIG")
+            message_="key '$3' is not configurable"
+            ;;
+        "ERROR_SETTING_VALIDATE_NO_DEFAULT")
+            message_="setting '$3' does not have default value"
             ;;
 
         # Fatal
+        "FATAL_INVALID_SETTING")
+            message_="failed to resolve setting '$3'"
+            ;;
         "FATAL_CREATE_TEMP")
             message_="failed to create temporary file in '$3'"
             ;;
@@ -372,12 +410,12 @@ _bl_log_debug_emit() {
     _bl_log_write "$LEVEL" "$call_path: $MESSAGE"
     
     local debug
-    bl_config_resolve "debug" debug || return 1
+    bl_setting_resolve "debug" debug || return 1
     
     if $debug; then
         
         local color_mode color color_reset
-        bl_config_resolve "color" color_mode || return 1
+        bl_setting_resolve "color" color_mode || return 1
         _bl_log_get_color "$color_mode" "$LEVEL" color color_reset
         _bl_log_debug_print \
             "$color" "$color_reset" "$call_path" "$LEVEL" "$MESSAGE" || return 1

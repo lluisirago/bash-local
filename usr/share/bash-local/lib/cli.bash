@@ -100,7 +100,7 @@ bl() {
                 return 0
                 ;;
             -*)
-                bl_log "USAGE_BAD_OPTION" "$1"
+                bl_log "USAGE_INVALID_OPTION" "$1"
                 return 1
                 ;;
             *)
@@ -119,7 +119,7 @@ bl() {
         "${_BL_CONST[INIT_COMMAND]}")       bl-init "$@";;
         "${_BL_CONST[RM_COMMAND]}")         bl-rm "$@";;
         "${_BL_CONST[VERSION_COMMAND]}")    bl-version;;
-        *) bl_log "USAGE_BAD_COMMAND" "$command";;
+        *) bl_log "USAGE_INVALID_COMMAND" "$command";;
     esac
 }
 
@@ -135,7 +135,7 @@ bl-init() {
                 return 0
                 ;;
             -*)
-                bl_log "USAGE_BAD_OPTION" "$1"
+                bl_log "USAGE_INVALID_OPTION" "$1"
                 return 1
                 ;;
             *)  
@@ -224,7 +224,7 @@ bl-add() {
             "${_BL_CONST[ADD_LONG_OPTION_INIT]}") ;;
             "${_BL_CONST[ADD_OPTION_F]}"|"${_BL_CONST[ADD_LONG_OPTION_FORCE]}") ;;
             -*)
-                bl_log "USAGE_BAD_OPTION" "$1"
+                bl_log "USAGE_INVALID_OPTION" "$1"
                 return 1
                 ;;
             *)
@@ -341,4 +341,15 @@ bl-show() {
     for (( _i_ = 0; _i_ < "${#names[@]}"; _i_++ )); do
         echo "${names[_i_]}: (${lines[_i_]}) ${scopes[_i_]} ${starts[_i_]} ${ends[_i_]}"
     done
+}
+
+# MARK: Auxiliar
+# -----------------------------------------------------------------------------
+# @section Auxiliar functions
+#
+# Functions in this section implement additional functionality for the functions
+# above.
+
+_bl_cli_parse_options() {
+    true
 }
