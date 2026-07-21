@@ -3,8 +3,9 @@
 # @file config.bash
 #
 # @brief Configuration manager.
-# @description Defines settings and implements functions responsible for
-# managing bl configuration.
+# @description Implements functions responsible for managing bl configuration.
+#
+# Configuration refers to configurable settings.
 
 # MARK: Public
 # -----------------------------------------------------------------------------
@@ -62,37 +63,6 @@ bl_config_clear() {
         [[ $key == CONFIG_* ]] || continue
         _BL_STATE["$key"]=""
     done
-}
-
-# @description Decides value of setting according to order of priorities:
-# - Option value given by user and stored in `_BL_STATE[OPTION_<KEY>]`
-#   (optional).
-# - Environment variable defined as `BL_<KEY>=<value>` (optional).
-# - Configuration value in `_BL_STATE[CONFIG_<KEY>]` applied in starting
-#   procedure.
-#
-# Side effects:
-# - Reads `_BL_STATE`.
-#
-# @arg $1 string Key (lowercase).
-# @arg $2 string Reference to decided value.
-#
-# @exitcode 0 Success.
-# @exitcode 1 Invalid key or value.
-bl_config_resolve() {
-
-    local -r KEY="$1"    
-    local -n value_=$2
-    
-    local -r MAYUS_KEY="${KEY^^}"
-
-    if [[ -n "${_BL_STATE[OPTION_$MAYUS_KEY]:-}" ]]; then
-        value_="${_BL_STATE[OPTION_$MAYUS_KEY]}"
-    else
-        local -r KEY_VAR="BL_$MAYUS_KEY"
-        value_="${!KEY_VAR:-${_BL_STATE[CONFIG_$MAYUS_KEY]}}"
-    fi
-    _bl_config_validate "$KEY" "$value_" || return 1
 }
 
 
@@ -155,7 +125,7 @@ _bl_config_parse() {
 
         if ! [[ $line =~ ${_BL_CONST[CONFIG_PARSE_REGEX]} ]]; then
             
-            bl_log_debug "ERROR_CONFIG_PARSE_BAD_FORMAT" "$lineno"
+            bl_log_debug "ERROR_CONFIG_PARSE_INVALID_FORMAT" "$lineno"
             continue
         fi
 
@@ -186,107 +156,38 @@ _bl_config_filter() {
     local -n keys_=$1
     local -n values_=$2
 
-    if [[ "${#keys_[@]}" -ne "${#values_[@]}" ]]; then
+    local -ri LENGTH="${#keys_[@]}"
+
+    if [[ $LENGTH -ne "${#values_[@]}" ]]; then
         bl_log_debug "FATAL_UNEVEN_ARRAYS"
         return 1
     fi
-    [[ "${#keys_[@]}" -ne 0 ]] || return 0
+    [[ $LENGTH -ne 0 ]] || return 0
 
+    local key value error retval
     local -a aux_keys aux_values
     local -i i
-    for (( i = 0; i < ${#keys_[@]}; i++ )); do
+    for (( i = 0; i < LENGTH; i++ )); do
+
+        key="${keys_[i]}"
+        value="${values_[i]}"
         
-        if _bl_config_validate "${keys_[i]}" "${values_[i]}"; then
-            aux_keys+=("${keys_[i]}")
-            aux_values+=("${values_[i]}")
-        fi
+        bl_setting_validate "${key^^}" "$value" error
+        retval=$?
+
+        case $retval in
+            0)
+                aux_keys+=("$key")
+                aux_values+=("$value")
+                ;;
+            2)
+                bl_log_debug "ERROR_CONFIG_FILTER_INVALID_VALUE" "$value" "$key"
+                ;;  
+        esac
     done
 
     keys_=("${aux_keys[@]}")
     values_=("${aux_values[@]}")
-}
-
-
-# MARK: Validate
-# -----------------------------------------------------------------------------
-# @section Validators
-#
-# Functions in this section validate key-value settings depending on its type.
-
-# @description Validates a key-value pair according to type and checks extra
-# restrictions if exist.
-#
-# If no specific validator is defined (in case of no extra restrictions),
-# key-value pair is only validated by type validator.
-#
-# Side effects:
-# - Reads `_BL_CONST`.
-#
-# @arg $1 string Key (lowercase).
-# @arg $2 string Value.
-#
-# @exitcode 0 Validation succeeds.
-# @exitcode 1 Given key is not defined in `_BL_CONFIG_TYPE`.
-# @exitcode 2 Validation fails.
-_bl_config_validate() {
-    
-    local -r KEY="$1"
-    local -r VALUE="$2"
-
-    local -r MAYUS_KEY="${KEY^^}"
-
-    if ! [[ -v _BL_CONST[CONFIG_TYPE_"$MAYUS_KEY"] ]]; then
-        bl_log_debug "ERROR_CONFIG_VALIDATE_BAD_KEY" "$KEY"
-        return 1
-    fi
-    local -r TYPE="${_BL_CONST[CONFIG_TYPE_"$MAYUS_KEY"]}"
-    
-    if ! "_bl_config_validate_$TYPE" "$KEY" "$VALUE"; then
-        bl_log_debug "ERROR_CONFIG_VALIDATE_BAD_VALUE" "$VALUE" "$KEY"
-        return 2
-    fi
-    
-    # Extra restrictions
-    if declare -F "_bl_config_validate_$KEY" >/dev/null; then
-        if ! "_bl_config_validate_$KEY" "$VALUE"; then
-            bl_log_debug "ERROR_CONFIG_VALIDATE_BAD_VALUE" "$VALUE" "$KEY"
-            return 2
-        fi
-    fi
-}
-
-# @description Validates a bool (true or false).
-#
-# @arg $1 string Key.
-# @arg $2 string Value.
-#
-# @exitcode 0 Validation succeeds.
-# @exitcode 1 Validation fails.
-_bl_config_validate_bool() {
-
-    local -r VALUE="$2"
-    [[ $VALUE == true || $VALUE == false ]] || return 1
-}
-
-# @description Validates an enum according to valid values in `_BL_CONFIG_ENUM`.
-#
-# @arg $1 string Key (lowercase).
-# @arg $2 string Value.
-#
-# @exitcode 0 Validation succeeds.
-# @exitcode 1 Validation fails.
-_bl_config_validate_enum() {
-
-    local -r MAYUS_KEY="${1^^}"
-    local -r VALUE="$2"
-    
-    local option
-    
-    for option in ${_BL_CONST[CONFIG_ENUM_"$MAYUS_KEY"]}; do
-        [[ $option == "$VALUE" ]] && return 0
-    done
-    
-    return 1
 }
 
 
