@@ -32,7 +32,7 @@
 # @exitcode 1 Internal validation error.
 # @exitcode 2 Resolved using fallback after ignoring an invalid environment
 #             variable.
-# @exitcode 3 Unknown setting.
+# @exitcode 3 Unknown setting (logged in debug).
 bl_setting_resolve() {
 
     local -r KEY="$1"    
@@ -76,7 +76,7 @@ bl_setting_resolve() {
         return $status_env_var
     fi
 
-    bl_log_debug "FATAL_INVALID_SETTING" "${KEY,,}" # (lowercase)
+    bl_log_debug "FATAL_SETTING_RESOLVE_INVALID_SETTING" "${KEY,,}" # (lowercase)
     return 3
 }
 
@@ -94,10 +94,10 @@ bl_setting_resolve() {
 # @arg $4 string Reference to validation error code.
 #
 # @exitcode 0 Success.
-# @exitcode 1 Given key type is not defined in `_BL_CONST`.
+# @exitcode 1 Given key type is not defined in `_BL_CONST` (logged in debug).
 # @exitcode 2 Validation fails.
-# @exitcode 3 Invalid lifetime.
-# @exitcode 4 Given setting is not defined in `_BL_STATE`.
+# @exitcode 3 Invalid lifetime (logged in debug).
+# @exitcode 4 Given setting is not defined in `_BL_STATE` (logged in debug).
 bl_setting_set() {
 
     local -r SETTING_LIFETIME="$1"
@@ -111,20 +111,21 @@ bl_setting_set() {
     case $SETTING_LIFETIME in
 
         "${_BL_CONST[SETTING_LIFETIME_RUNTIME]}")
-            state_key="SETTING_RUNTIME_${KEY}"
+            state_key="SETTING_${_BL_CONST[SETTING_LIFETIME_RUNTIME]}_${KEY}"
             ;;
 
         "${_BL_CONST[SETTING_LIFETIME_SESSION]}")
-            state_key="SETTING_SESSION_${KEY}"
+            state_key="SETTING_${_BL_CONST[SETTING_LIFETIME_SESSION]}_${KEY}"
             ;;
 
         *)
             bl_log_debug \
-                "FATAL_SETTING_SET_INVALID_LIFETIME" "$SETTING_LIFETIME"
+                "FATAL_SETTING_INVALID_LIFETIME" "$SETTING_LIFETIME"
             return 3
     esac
 
     if ! [[ -v _BL_STATE["$state_key"] ]]; then
+
         bl_log_debug "FATAL_MISSING_VARIABLE" "_BL_STATE[$state_key]"
         return 4
     fi
@@ -146,7 +147,7 @@ bl_setting_set() {
 # @arg $3 string Reference to error code.
 #
 # @exitcode 0 Validation succeeds.
-# @exitcode 1 Given key type is not defined in `_BL_CONST`.
+# @exitcode 1 Given key type is not defined in `_BL_CONST` (logged in debug).
 # @exitcode 2 Validation fails.
 bl_setting_validate() {
 
@@ -172,6 +173,49 @@ bl_setting_validate() {
 
         "_bl_setting_validate_$MINUS_KEY" "$VALUE" error__ || return 2
     fi
+}
+
+# @description Clears settings given its lifetime.
+#
+# Side effects:
+# - Writes `_BL_STATE`.
+#
+# @arg $1 string Setting lifetime (uppercase).
+#
+# @exitcode 0 Success.
+# @exitcode 1 Invalid lifetime (logged in debug).
+# @exitcode 2 `_BL_STATE` is not defined (logged in debug).
+bl_setting_clear() {
+
+    local -r SETTING_LIFETIME="$1"
+
+    local state_prefix
+    case $SETTING_LIFETIME in
+
+        "${_BL_CONST[SETTING_LIFETIME_RUNTIME]}")
+            state_prefix="SETTING_${_BL_CONST[SETTING_LIFETIME_RUNTIME]}"
+            ;;
+
+        "${_BL_CONST[SETTING_LIFETIME_SESSION]}")
+            state_prefix="SETTING_${_BL_CONST[SETTING_LIFETIME_SESSION]}"
+            ;;
+
+        *)
+            bl_log_debug \
+                "FATAL_SETTING_INVALID_LIFETIME" "$SETTING_LIFETIME"
+            return 1
+    esac
+
+    if ! declare -p _BL_STATE &>/dev/null; then
+        bl_log_debug "FATAL_MISSING_VARIABLE" "_BL_STATE"
+        return 2
+    fi
+
+    for key in "${!_BL_STATE[@]}"; do
+
+        [[ $key == $state_prefix* ]] || continue
+        _BL_STATE["$key"]=""
+    done
 }
 
 

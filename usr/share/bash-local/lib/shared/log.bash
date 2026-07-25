@@ -346,6 +346,9 @@ _bl_log_debug_translate() {
         "ERROR_CONFIG_PARSE_INVALID_FORMAT")
             message_="$3: invalid format"
             ;;
+        "ERROR_CONFIG_SET_INVALID_SETTING")
+            message_="invalid value '$3' for option '$4'"
+            ;;
         "ERROR_SETTING_VALIDATE_INVALID_KEY")
             message_="key '$3' not found"
             ;;
@@ -372,7 +375,7 @@ _bl_log_debug_translate() {
         "FATAL_SETTING_RESOLVE_INVALID_SETTING")
             message_="failed to resolve setting '$3'"
             ;;
-        "FATAL_SETTING_SET_INVALID_LIFETIME")
+        "FATAL_SETTING_INVALID_LIFETIME")
 
             local expected_values=""
 
