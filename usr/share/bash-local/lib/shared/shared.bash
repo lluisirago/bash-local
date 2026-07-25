@@ -85,6 +85,9 @@ declare -gA _BL_CONST=(
 
     [SETTING_ENUM_COLOR]="always auto never"
 
+    [SETTING_LIFETIME_RUNTIME]=RUNTIME
+    [SETTING_LIFETIME_SESSION]=SESSION
+
     [SETTING_OF_-C]=DIR
     [SETTING_OF_-d]=DIR
     [SETTING_OF_-f]=FORCE
@@ -132,20 +135,19 @@ declare -gA _BL_STATE=(
 
     [PPD]=""
 
-    # CLI option settings
-    [OPTION_COLOR]=""
-    [OPTION_DIR]=""
-    [OPTION_DEBUG]=""
-    [OPTION_FORCE]=""
-    [OPTION_HELP]=""
-    [OPTION_INIT]=""
-    [OPTION_VERBOSE]=""
-    [OPTION_VERSION]=""
+    # Settings
+    [SETTING_RUNTIME_COLOR]=""
+    [SETTING_RUNTIME_DIR]=""
+    [SETTING_RUNTIME_DEBUG]=""
+    [SETTING_RUNTIME_FORCE]=""
+    [SETTING_RUNTIME_HELP]=""
+    [SETTING_RUNTIME_INIT]=""
+    [SETTING_RUNTIME_VERBOSE]=""
+    [SETTING_RUNTIME_VERSION]=""
 
-    # Config settings
-    [CONFIG_COLOR]=""
-    [CONFIG_DEBUG]=""
-    [CONFIG_VERBOSE]=""
+    [SETTING_SESSION_COLOR]=""
+    [SETTING_SESSION_DEBUG]=""
+    [SETTING_SESSION_VERBOSE]=""
 
     # Log colors
     [LOG_SUPPORTS_COLOR]=true

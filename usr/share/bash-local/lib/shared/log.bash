@@ -346,12 +346,6 @@ _bl_log_debug_translate() {
         "ERROR_CONFIG_PARSE_INVALID_FORMAT")
             message_="$3: invalid format"
             ;;
-        "ERROR_CONFIG_FILTER_INVALID_VALUE")
-            message_="invalid value '$3' for '$4'"
-            ;;
-        #"ERROR_SETTING_VALIDATE_BAD_DEFAULT")
-        #    message_="invalid default value '$3' for '$4'"
-        #    ;;
         "ERROR_SETTING_VALIDATE_INVALID_KEY")
             message_="key '$3' not found"
             ;;
@@ -363,9 +357,6 @@ _bl_log_debug_translate() {
             ;;
 
         # Fatal
-        "FATAL_INVALID_SETTING")
-            message_="failed to resolve setting '$3'"
-            ;;
         "FATAL_CREATE_TEMP")
             message_="failed to create temporary file in '$3'"
             ;;
@@ -377,6 +368,25 @@ _bl_log_debug_translate() {
             ;;
         "FATAL_READ")
             message_="unable to read file '$3'"
+            ;;
+        "FATAL_SETTING_RESOLVE_INVALID_SETTING")
+            message_="failed to resolve setting '$3'"
+            ;;
+        "FATAL_SETTING_SET_INVALID_LIFETIME")
+
+            local expected_values=""
+
+            local value
+            for value in "${!_BL_CONST[@]}"; do
+                
+                [[ $value == SETTING_LIFETIME_* ]] || continue
+                expected_values+="${value#SETTING_LIFETIME_}, "
+            done
+
+            expected_values="${expected_values%, }"
+            [[ -n $expected_values ]] && expected_values=" (expected: ${expected_values})"
+
+            message_="invalid lifetime '$3'$expected_values"
             ;;
         "FATAL_UNEVEN_ARRAYS")
             message_="given arrays have different size"
@@ -409,13 +419,13 @@ _bl_log_debug_emit() {
     _bl_log_get_call_path call_path
     _bl_log_write "$LEVEL" "$call_path: $MESSAGE"
     
-    local debug
-    bl_setting_resolve "debug" debug || return 1
+    local debug error
+    bl_setting_resolve "DEBUG" debug error || return 1
     
     if $debug; then
         
         local color_mode color color_reset
-        bl_setting_resolve "color" color_mode || return 1
+        bl_setting_resolve "COLOR" color_mode error || return 1
         _bl_log_get_color "$color_mode" "$LEVEL" color color_reset
         _bl_log_debug_print \
             "$color" "$color_reset" "$call_path" "$LEVEL" "$MESSAGE" || return 1
