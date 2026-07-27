@@ -104,6 +104,8 @@ bl_setting_set() {
     local -r KEY="$2"
     local -r VALUE="$3"
     local -n error_=$4
+
+    error_=""
     
     bl_setting_validate "$KEY" "$VALUE" error_ || return
     
@@ -125,7 +127,6 @@ bl_setting_set() {
     esac
 
     if ! [[ -v _BL_STATE["$state_key"] ]]; then
-
         bl_log_debug "FATAL_MISSING_VARIABLE" "_BL_STATE[$state_key]"
         return 4
     fi
@@ -155,11 +156,12 @@ bl_setting_validate() {
     local -r VALUE="$2"
     local -n error__=$3
 
+    error__=""
+
     local -r MINUS_KEY="${KEY,,}"
     
     # Key
     if ! [[ -v _BL_CONST["SETTING_TYPE_$KEY"] ]]; then
-
         bl_log_debug "ERROR_SETTING_VALIDATE_INVALID_KEY" "$MINUS_KEY"
         return 1
     fi
@@ -169,9 +171,9 @@ bl_setting_validate() {
     "_bl_setting_validate_$TYPE" "$KEY" "$VALUE" error__ || return 2
     
     # Extra restrictions
-    if declare -F "_bl_setting_validate_$MINUS_KEY" >/dev/null; then
+    if declare -F "_bl_setting_validate_${MINUS_KEY}" >/dev/null; then
 
-        "_bl_setting_validate_$MINUS_KEY" "$VALUE" error__ || return 2
+        "_bl_setting_validate_$MINUS_KEY" "$KEY" "$VALUE" error__ || return 2
     fi
 }
 
@@ -263,12 +265,12 @@ _bl_setting_validate_dir() {
 
     local -r VALUE="$2"
     local -n error___=$3
-
+    
     if [[ -z "$VALUE" ]]; then
         error___="NO_DIR"
         return 1
     fi
-
+    
     if [[ ! -d "$VALUE" ]]; then
         error___="NOT_A_DIR"
         return 1
@@ -278,10 +280,10 @@ _bl_setting_validate_dir() {
         error___="NO_PERM"
         return 1
     fi
-
+    
     local -r DIR="$(realpath "$VALUE")"
     local -r REAL_HOME="$(realpath "$HOME")"
-
+    
     if ! [[ $DIR == "$REAL_HOME" || $DIR == "$REAL_HOME"/* ]]; then
         error___="OUT_HOME"
         return 1

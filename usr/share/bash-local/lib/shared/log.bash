@@ -212,11 +212,15 @@ _bl_log_translate() {
         "FATAL_NOT_A_DIR") 
             message_="$3: not a directory"
             ;;
-        "FATAL_NO_FILE")
-            message_="$3: no such file"
+        "FATAL_NO_BOOL")
+            message_="invalid value '$3' for boolean option '$4'"
+            message_+=" (expected: true, false or no value)"
             ;;
         "FATAL_NO_DIR")
-            message_="missing directory after '$3'"
+            message_="missing directory after '$4'"
+            ;;
+        "FATAL_NO_FILE")
+            message_="$3: no such file"
             ;;
         "FATAL_NO_PERM")
             message_="$3: permission denied"
@@ -262,7 +266,7 @@ _bl_log_emit() {
     _bl_log_write "$LEVEL" "$MESSAGE"
         
     local color_mode color color_reset
-    bl_setting_resolve "color" color_mode || return 1
+    bl_setting_resolve "COLOR" color_mode error || return 1
     _bl_log_get_color "$color_mode" "$LEVEL" color color_reset
     _bl_log_print \
         "$color" "$color_reset" "$LEVEL" "$MESSAGE" || return 1
