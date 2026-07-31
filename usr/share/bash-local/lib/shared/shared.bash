@@ -28,6 +28,12 @@ declare -gr _BL_SHARED_LOADED=1
 # - CLI options
 declare -gA _BL_CONST=(
 
+    [CLI_ADD_REGEX]='^([^:=]+:){0,2}[^:=]+(=(-|@.+|[^@].*|))?$'
+    [CLI_ADD_SOURCE_TYPE_EDITOR]=EDITOR
+    [CLI_ADD_SOURCE_TYPE_FILE]=FILE
+    [CLI_ADD_SOURCE_TYPE_INLINE]=INLINE
+    [CLI_ADD_SOURCE_TYPE_STDIN]=STDIN
+
     # bl commands
     [COMMAND_ADD]=add
     [COMMAND_CONFIG]=config
@@ -60,18 +66,20 @@ declare -gA _BL_CONST=(
     [LOG_COLOR_INFO]='\033[0m'     # None
     [LOG_COLOR_RESET]='\033[0m'    # None (to reset)
     [LOG_COLOR_USAGE]='\033[0m'    # None
+    [LOG_COLOR_WARN]='\033[33m'    # Yellow
     [LOG_LEVEL_ERROR]=error
     [LOG_LEVEL_FATAL]=fatal
     [LOG_LEVEL_INFO]=info
     [LOG_LEVEL_USAGE]=usage
+    [LOG_LEVEL_WARN]=warning
     [LOG_INIT_MAX_SIZE]=1048576 # 1MB
 
-    # Manifest
-    [MANIFEST_SCHEMA_KIND_ALIAS]=alias
-    [MANIFEST_SCHEMA_KIND_FUNCTION]=func
-    [MANIFEST_SCHEMA_KIND_VARIABLE]=var
-    [MANIFEST_SCHEMA_SCOPE_LOCAL]=local
-    [MANIFEST_SCHEMA_SCOPE_SCOPED]=scoped
+    # Schema
+    [SCHEMA_KIND_ALIAS]=alias
+    [SCHEMA_KIND_FUNCTION]=func
+    [SCHEMA_KIND_VARIABLE]=var
+    [SCHEMA_SCOPE_LOCAL]=local
+    [SCHEMA_SCOPE_SCOPED]=scoped
 
     # Settings module
     [SETTING_DEFAULT_COLOR]=auto
@@ -113,6 +121,10 @@ declare -gA _BL_CONST=(
 )
 
 ## Derived Constants
+
+_BL_CONST[CLI_ADD_DEFAULT_KIND]="${_BL_CONST[SCHEMA_KIND_VARIABLE]}"
+_BL_CONST[CLI_ADD_DEFAULT_SCOPE]="${_BL_CONST[SCHEMA_SCOPE_LOCAL]}"
+
 
 # Directories
 _BL_CONST[DIR_SOURCE]="${_BL_CONST[DIR_BL]}source/"

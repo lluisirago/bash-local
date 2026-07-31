@@ -52,7 +52,6 @@ bl_log() {
 
     local message level
     level="${CODE%%_*}"
-    level="${level,,}"
     
     _bl_log_translate "$CODE" message "$2" "$3" || level="error"
     _bl_log_emit "$level" "$message" || return 1
@@ -74,7 +73,6 @@ bl_log_debug() {
 
     local message level
     level="${CODE%%_*}"
-    level="${level,,}"
     
     _bl_log_debug_translate "$CODE" message "$2" "$3" || level="error"
     _bl_log_debug_emit "$level" "$message" || return 1
@@ -194,6 +192,9 @@ _bl_log_translate() {
         "ERROR_NO_FILE")
             message_="$3: no such file"
             ;;
+        "ERROR_NO_STDIN")
+            message_="no input received from stdin"
+            ;;
 
         # Fatal
         "FATAL_ALREADY_INIT")
@@ -208,6 +209,9 @@ _bl_log_translate() {
             [[ -n $VALUES ]] && expected_values=" (expected: $VALUES)"
 
             message_="invalid value '$3' for option '$4'$expected_values"
+            ;;
+        "FATAL_MULTIPLE_STDIN")
+            message_="cannot read multiple values from stdin, only one argument may use '-'"
             ;;
         "FATAL_NOT_A_DIR") 
             message_="$3: not a directory"
@@ -236,12 +240,28 @@ _bl_log_translate() {
             ;;
         
         # Info
-        "INFO_INIT") message_="Initialized empty environment in '$3'";;
+        "INFO_INIT")
+            message_="Initialized empty environment in '$3'"
+            ;;
 
         # Usage
-        "USAGE_MANY_ARGS") message_="too many arguments";;
-        "USAGE_INVALID_OPTION") message_="unknown option: $3";;
-        "USAGE_INVALID_COMMAND") message_="$3: not a bl command";;
+        "USAGE_MANY_ARGS")
+            message_="too many arguments"
+            ;;
+        "USAGE_INVALID_ARG")
+            message_="invalid argument '$3' (expected: [scope:][kind:]name[=value|=@file|=-])"
+            ;;
+        "USAGE_INVALID_OPTION")
+            message_="unknown option: $3"
+            ;;
+        "USAGE_INVALID_COMMAND")
+            message_="$3: not a bl command"
+            ;;
+
+        # Warning
+        "WARN_IGNORING_STDIN")
+            message_="standard input was provided but not used; ignoring it"
+            ;;
 
         # Default
         *)
@@ -253,8 +273,11 @@ _bl_log_translate() {
 
 # @description Writes a message to log file and terminal.
 #
-# @arg $1 string Level (lowercase).
+# @arg $1 string Level (uppercase).
 # @arg $2 string Message.
+#
+# Side effects:
+# - Reads `_BL_CONST`.
 #
 # @exitcode 0 Success.
 # @exitcode 1 Internal error.
@@ -263,13 +286,19 @@ _bl_log_emit() {
     local -r LEVEL="$1"
     local -r MESSAGE="$2"
 
-    _bl_log_write "$LEVEL" "$MESSAGE"
+    if ! [[ -v _BL_CONST["LOG_LEVEL_$LEVEL"] ]]; then
+        _bl_log_internal_error "missing variable '_BL_CONST[LOG_LEVEL_$LEVEL]'"
+        return 1
+    fi
+
+    _bl_log_write "${_BL_CONST["LOG_LEVEL_$LEVEL"]}" "$MESSAGE"
         
     local color_mode color color_reset
     bl_setting_resolve "COLOR" color_mode error || return 1
     _bl_log_get_color "$color_mode" "$LEVEL" color color_reset
     _bl_log_print \
-        "$color" "$color_reset" "$LEVEL" "$MESSAGE" || return 1
+        "$color" "$color_reset" \
+        "${_BL_CONST["LOG_LEVEL_$LEVEL"]}" "$MESSAGE" || return 1
 }
 
 # @description Prints debug message.
@@ -281,11 +310,12 @@ _bl_log_emit() {
 # - other levels: <level>: <message>
 #
 # Side effects:
+# - Reads `_BL_CONST`.
 # - Writes in terminal.
 #
 # @arg $1 string Color ANSI escape sequence.
 # @arg $2 string Color reset ANSI escape sequence.
-# @arg $3 string Level (lowercase).
+# @arg $3 string Level tag (lowercase).
 # @arg $4 string Message.
 #
 # @exitcode 0 Success.
@@ -364,6 +394,9 @@ _bl_log_debug_translate() {
             ;;
 
         # Fatal
+        "FATAL_CLI_ADD_RESOLVE_STDIN_NOT_STDIN")
+            message_="given source type is not stdin"
+            ;;
         "FATAL_CREATE_TEMP")
             message_="failed to create temporary file in '$3'"
             ;;
@@ -415,6 +448,9 @@ _bl_log_debug_translate() {
 # @arg $1 string Level.
 # @arg $2 string Message.
 #
+# Side effects:
+# - Reads `_BL_CONST`.
+#
 # @exitcode 0 Success.
 # @exitcode 1 Internal error.
 _bl_log_debug_emit() {
@@ -422,9 +458,14 @@ _bl_log_debug_emit() {
     local -r LEVEL="$1"
     local -r MESSAGE="$2"
 
+    if ! [[ -v _BL_CONST["LOG_LEVEL_$LEVEL"] ]]; then
+        _bl_log_internal_error "missing variable '_BL_CONST[LOG_LEVEL_$LEVEL]'"
+        return 1
+    fi
+
     local call_path
     _bl_log_get_call_path call_path
-    _bl_log_write "$LEVEL" "$call_path: $MESSAGE"
+    _bl_log_write "${_BL_CONST["LOG_LEVEL_$LEVEL"]}" "$call_path: $MESSAGE"
     
     local debug error
     bl_setting_resolve "DEBUG" debug error || return 1
@@ -435,7 +476,8 @@ _bl_log_debug_emit() {
         bl_setting_resolve "COLOR" color_mode error || return 1
         _bl_log_get_color "$color_mode" "$LEVEL" color color_reset
         _bl_log_debug_print \
-            "$color" "$color_reset" "$call_path" "$LEVEL" "$MESSAGE" || return 1
+            "$color" "$color_reset" "$call_path" \
+            "${_BL_CONST["LOG_LEVEL_$LEVEL"]}" "$MESSAGE" || return 1
     fi
 }
 
@@ -451,7 +493,7 @@ _bl_log_debug_emit() {
 # @arg $1 string Color ANSI escape sequence.
 # @arg $2 string Color reset ANSI escape sequence.
 # @arg $3 string Call path.
-# @arg $4 string Level.
+# @arg $4 string Level tag (lowercase).
 # @arg $5 string Message.
 #
 # @exitcode 0 Success.
@@ -544,7 +586,7 @@ _bl_log_get_call_path() {
 # - Reads `_BL_CONST`.
 #
 # @arg $1 string Color mode (lowercase).
-# @arg $2 string Log level (lowercase).
+# @arg $2 string Log level (uppercase).
 # @arg $3 string Reference to color ANSI escape sequence.
 # @arg $4 string Reference to color reset ANSI escape sequence.
 #
@@ -554,7 +596,7 @@ _bl_log_get_call_path() {
 _bl_log_get_color() {
 
     local -r COLOR_MODE="$1"
-    local -r MAYUS_LEVEL="${2^^}"
+    local -r LEVEL="$2"
     local -n out_color=$3
     local -n out_color_reset=$4
     
@@ -563,8 +605,8 @@ _bl_log_get_color() {
 
     _bl_log_use_color "$COLOR_MODE" || return 0
 
-    if ! [[ -v _BL_CONST[LOG_COLOR_"$MAYUS_LEVEL"] ]]; then
-        _bl_log_internal_error "missing variable '_BL_CONST[LOG_COLOR_$MAYUS_LEVEL]'"
+    if ! [[ -v _BL_CONST[LOG_COLOR_"$LEVEL"] ]]; then
+        _bl_log_internal_error "missing variable '_BL_CONST[LOG_COLOR_$LEVEL]'"
         return 1
     fi
 
@@ -573,7 +615,7 @@ _bl_log_get_color() {
         return 2
     fi
 
-    out_color="${_BL_CONST[LOG_COLOR_"$MAYUS_LEVEL"]}"
+    out_color="${_BL_CONST[LOG_COLOR_"$LEVEL"]}"
     out_color_reset="${_BL_CONST[LOG_COLOR_RESET]}"
 }
 
