@@ -28,11 +28,12 @@ declare -gr _BL_SHARED_LOADED=1
 # - CLI options
 declare -gA _BL_CONST=(
 
-    [CLI_ADD_REGEX]='^([^:=]+:){0,2}[^:=]+(=(-|@.+|[^@].*|))?$'
-    [CLI_ADD_SOURCE_TYPE_EDITOR]=EDITOR
-    [CLI_ADD_SOURCE_TYPE_FILE]=FILE
-    [CLI_ADD_SOURCE_TYPE_INLINE]=INLINE
-    [CLI_ADD_SOURCE_TYPE_STDIN]=STDIN
+    [ADD_ARGUMENT_REGEX]='^([^:=]+:){0,2}[^:=]+(=(-|@.+|[^@].*|))?$'
+    [ADD_SHELL_ID_REGEX]='^[a-zA-Z_][a-zA-Z0-9_]*$'
+    [ADD_SOURCE_TYPE_EDITOR]=EDITOR
+    [ADD_SOURCE_TYPE_FILE]=FILE
+    [ADD_SOURCE_TYPE_INLINE]=INLINE
+    [ADD_SOURCE_TYPE_STDIN]=STDIN
 
     # bl commands
     [COMMAND_ADD]=add
@@ -82,9 +83,10 @@ declare -gA _BL_CONST=(
     [SCHEMA_SCOPE_SCOPED]=scoped
 
     # Settings module
+    [SETTING_DEFAULT_ATOMIC]=false
     [SETTING_DEFAULT_COLOR]=auto
-    [SETTING_DEFAULT_DEBUG]=true
-    [SETTING_DEFAULT_DIR]=./
+    [SETTING_DEFAULT_DEBUG]=true # Change before deployment
+    [SETTING_DEFAULT_ENV]=./
     [SETTING_DEFAULT_FORCE]=false
     [SETTING_DEFAULT_HELP]=false
     [SETTING_DEFAULT_INIT]=false
@@ -96,20 +98,26 @@ declare -gA _BL_CONST=(
     [SETTING_LIFETIME_RUNTIME]=RUNTIME
     [SETTING_LIFETIME_SESSION]=SESSION
 
-    [SETTING_OF_-C]=DIR
-    [SETTING_OF_-d]=DIR
+    [SETTING_OF_-C]=ENV
+    [SETTING_OF_-d]=ENV
     [SETTING_OF_-f]=FORCE
     [SETTING_OF_-h]=HELP
-    [SETTING_OF_-v]=VERSION
-    [SETTING_OF_--cwd]=DIR
-    [SETTING_OF_--dir]=DIR
+    [SETTING_OF_-v]=VERBOSE
+    [SETTING_OF_-V]=VERSION
+    [SETTING_OF_--atomic]=ATOMIC
+    [SETTING_OF_--color]=COLOR
+    [SETTING_OF_--cwd]=ENV
+    [SETTING_OF_--dir]=ENV
+    [SETTING_OF_--force]=FORCE
     [SETTING_OF_--help]=HELP
     [SETTING_OF_--init]=INIT
+    [SETTING_OF_--verbose]=VERBOSE
     [SETTING_OF_--version]=VERSION
 
+    [SETTING_TYPE_ATOMIC]=bool
     [SETTING_TYPE_COLOR]=enum
     [SETTING_TYPE_DEBUG]=bool
-    [SETTING_TYPE_DIR]=dir
+    [SETTING_TYPE_ENV]=dir
     [SETTING_TYPE_FORCE]=bool
     [SETTING_TYPE_HELP]=bool
     [SETTING_TYPE_INIT]=bool
@@ -122,8 +130,8 @@ declare -gA _BL_CONST=(
 
 ## Derived Constants
 
-_BL_CONST[CLI_ADD_DEFAULT_KIND]="${_BL_CONST[SCHEMA_KIND_VARIABLE]}"
-_BL_CONST[CLI_ADD_DEFAULT_SCOPE]="${_BL_CONST[SCHEMA_SCOPE_LOCAL]}"
+_BL_CONST[ADD_DEFAULT_KIND]="${_BL_CONST[SCHEMA_KIND_VARIABLE]}"
+_BL_CONST[ADD_DEFAULT_SCOPE]="${_BL_CONST[SCHEMA_SCOPE_LOCAL]}"
 
 
 # Directories
@@ -148,8 +156,9 @@ declare -gA _BL_STATE=(
     [PPD]=""
 
     # Settings
+    [SETTING_RUNTIME_ATOMIC]=""
     [SETTING_RUNTIME_COLOR]=""
-    [SETTING_RUNTIME_DIR]=""
+    [SETTING_RUNTIME_ENV]=""
     [SETTING_RUNTIME_DEBUG]=""
     [SETTING_RUNTIME_FORCE]=""
     [SETTING_RUNTIME_HELP]=""
@@ -157,6 +166,7 @@ declare -gA _BL_STATE=(
     [SETTING_RUNTIME_VERBOSE]=""
     [SETTING_RUNTIME_VERSION]=""
 
+    [SETTING_SESSION_ATOMIC]=""
     [SETTING_SESSION_COLOR]=""
     [SETTING_SESSION_DEBUG]=""
     [SETTING_SESSION_VERBOSE]=""
@@ -201,29 +211,6 @@ bl_atomic_write() {
         return 2
     fi  
     bl_run_external mv -f -- "$tmp" "$FILE" || { rm -f -- "$tmp"; return 3; }
-}
-
-
-# MARK: Assert
-# -----------------------------------------------------------------------------
-# @section Asserting functions
-#
-# Functions in this section implement checks used in CLI, logging the error if
-# required.
-
-# @description Checks if a directory is valid.
-#
-# Logs the error in case directory is invalid.
-#
-# @arg $1 string Command that called the function
-# @arg $2 string Path to directory
-#
-# @see Used in [cli.bash](./cli.md)
-_bl_assert_valid_dir() {    
-
-    [[ -n "$2" ]] || { bl_log "FATAL_NO_DIR" "$1"; return 1; }
-    [[ -d "$2" ]] || { bl_log "FATAL_NOT_A_DIR" "$2"; return 1; }
-    [[ $2 == $HOME* ]] || { bl_log "FATAL_OUT_HOME" "$2"; return 1; }
 }
 
 

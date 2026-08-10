@@ -9,8 +9,7 @@
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/shared/shared.bash"
 source "$(dirname "${BASH_SOURCE[0]}")/lib/core.bash"
-source "$(dirname "${BASH_SOURCE[0]}")/lib/cli.bash"
-
+source "$(dirname "${BASH_SOURCE[0]}")/lib/cli/cli.bash"
 
 # @description Starts bash-local modules: configuration setup and logging
 # initialization.

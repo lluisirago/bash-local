@@ -49,11 +49,12 @@ bl_log_init() {
 bl_log() {
 
     local -r CODE="$1"
+    shift
 
     local message level
     level="${CODE%%_*}"
     
-    _bl_log_translate "$CODE" message "$2" "$3" || level="error"
+    _bl_log_translate "$CODE" message "$@" || level="ERROR"
     _bl_log_emit "$level" "$message" || return 1
 }
 
@@ -173,8 +174,7 @@ _bl_log_write() {
 #
 # @arg $1 string Code.
 # @arg $2 string Reference to message.
-# @arg $3 string First object to refer to (optional).
-# @arg $4 string Second object to refer to (optional).
+# @arg $3... string Objects to refer to (optional).
 #
 # @exitcode 0 Code is supported.
 # @exitcode 1 Unknown code.
@@ -186,11 +186,54 @@ _bl_log_translate() {
     case "$CODE" in
 
         # Error
-        "ERROR_IS_DIR")
-            message_="$3: is a directory"
+        "ERROR_ALREADY_EXISTS")
+            message_="$3: already exists in '$4'"
             ;;
-        "ERROR_NO_FILE")
-            message_="$3: no such file"
+        "ERROR_INVALID_ELEMENT")
+            message_="$3:$4"
+            ;;
+        "ERROR_INVALID_FILE_DEFINITION")
+            message_="invalid definition in '$3':$4"
+            ;;
+        "ERROR_INVALID_INLINE_DEFINITION")
+            message_="invalid inline definition:$3"
+            ;;
+        "ERROR_INVALID_KIND")
+
+            local -a values
+
+            local key
+            for key in "${!_BL_CONST[@]}"; do
+                [[ $key == "SCHEMA_KIND_"* ]] || continue
+                values+=("${_BL_CONST["$key"]}")
+            done
+
+            local expected_values
+            _bl_log_get_expected_values values expected_values
+
+            message_="invalid kind '$3'$expected_values"
+            ;;
+        "ERROR_INVALID_NAME")
+
+            message_="invalid name"
+            ;;
+        "ERROR_INVALID_SCOPE")
+
+            local -a values
+
+            local key
+            for key in "${!_BL_CONST[@]}"; do
+                [[ $key == "SCHEMA_SCOPE_"* ]] || continue
+                values+=("${_BL_CONST["$key"]}")
+            done
+
+            local expected_values
+            _bl_log_get_expected_values values expected_values
+
+            message_="invalid scope '$3'$expected_values"
+            ;;
+        "ERROR_NOT_FILE")
+            message_="no such file '$3'"
             ;;
         "ERROR_NO_STDIN")
             message_="no input received from stdin"
@@ -200,31 +243,61 @@ _bl_log_translate() {
         "FATAL_ALREADY_INIT")
             message_="$3: already initialized"
             ;;
+        "FATAL_ATOMIC_FAILED")
+            message_="validation failed; no elements were added"
+            ;;
+        "FATAL_DUPLICATE")
+            message_="$3: duplicate element name"
+            ;;
+        "FATAL_INVALID_BOOL")
+            message_="invalid boolean value '$3'"
+            message_+=" (expected: true, false or no value)"
+            ;;
         "FATAL_INVALID_ENUM")
 
             local -r MAYUS_KEY="${_BL_CONST[SETTING_OF_$4]}"
-            local -r VALUES="${_BL_CONST[SETTING_ENUM_$MAYUS_KEY]// /, }"
+            local -a values
+            read -r -a values <<< "${_BL_CONST["SETTING_ENUM_$MAYUS_KEY"]}"
+            
+            local expected_values
+            _bl_log_get_expected_values values expected_values
 
-            local expected_values=""
-            [[ -n $VALUES ]] && expected_values=" (expected: $VALUES)"
+            message_="invalid value '$3'$expected_values"
+            ;;
+        "FATAL_INVALID_ENV_VAR")
+            
+            local -r VAR="BL_$3"
+            local VALUE="${!VAR}"
+            local -r ERROR="$4"
 
-            message_="invalid value '$3' for option '$4'$expected_values"
+            local error_message
+            _bl_log_translate "FATAL_$ERROR" error_message "$VALUE"
+            message_="$VAR: $error_message"
+            ;;
+        "FATAL_INVALID_OPTION")
+
+            local -r OPTION="$3"
+            local -r VALUE="$4"
+            local -r ERROR="$5"
+
+            local error_message
+            _bl_log_translate "FATAL_$ERROR" error_message "$VALUE" "$OPTION"
+            message_="$OPTION: $error_message"
             ;;
         "FATAL_MULTIPLE_STDIN")
             message_="cannot read multiple values from stdin, only one argument may use '-'"
             ;;
-        "FATAL_NOT_A_DIR") 
+        "FATAL_NOT_DIR") 
             message_="$3: not a directory"
             ;;
-        "FATAL_NO_BOOL")
-            message_="invalid value '$3' for boolean option '$4'"
-            message_+=" (expected: true, false or no value)"
+        "FATAL_NOT_ENV")
+            message_="$3: not a bl environment"
+            ;;
+        "FATAL_NOT_FILE")
+            message_="$3: no such file"
             ;;
         "FATAL_NO_DIR")
             message_="missing directory after '$4'"
-            ;;
-        "FATAL_NO_FILE")
-            message_="$3: no such file"
             ;;
         "FATAL_NO_PERM")
             message_="$3: permission denied"
@@ -243,12 +316,18 @@ _bl_log_translate() {
         "INFO_INIT")
             message_="Initialized empty environment in '$3'"
             ;;
+        "INFO_ADD_SUMMARY_NONE")
+            message_="No elements were added"
+            ;;
+        "INFO_ADD_SUMMARY_SOME")
+            message_="Added $3 of $4 elements"
+            ;;
 
         # Usage
         "USAGE_MANY_ARGS")
             message_="too many arguments"
             ;;
-        "USAGE_INVALID_ARG")
+        "USAGE_INVALID_ARG_FORMAT")
             message_="invalid argument '$3' (expected: [scope:][kind:]name[=value|=@file|=-])"
             ;;
         "USAGE_INVALID_OPTION")
@@ -292,9 +371,10 @@ _bl_log_emit() {
     fi
 
     _bl_log_write "${_BL_CONST["LOG_LEVEL_$LEVEL"]}" "$MESSAGE"
-        
+    
     local color_mode color color_reset
     bl_setting_resolve "COLOR" color_mode error || return 1
+    
     _bl_log_get_color "$color_mode" "$LEVEL" color color_reset
     _bl_log_print \
         "$color" "$color_reset" \
@@ -394,8 +474,11 @@ _bl_log_debug_translate() {
             ;;
 
         # Fatal
-        "FATAL_CLI_ADD_RESOLVE_STDIN_NOT_STDIN")
+        "FATAL_ADD_RESOLVE_STDIN_NOT_STDIN")
             message_="given source type is not stdin"
+            ;;
+        "FATAL_ADD_VALIDATE_SOURCE_UNKNOWN_SOURCE_TYPE")
+            message_="$3: unknown source type '$4'"
             ;;
         "FATAL_CREATE_TEMP")
             message_="failed to create temporary file in '$3'"
@@ -414,17 +497,16 @@ _bl_log_debug_translate() {
             ;;
         "FATAL_SETTING_INVALID_LIFETIME")
 
-            local expected_values=""
+            local -a values
 
-            local value
-            for value in "${!_BL_CONST[@]}"; do
-                
-                [[ $value == SETTING_LIFETIME_* ]] || continue
-                expected_values+="${value#SETTING_LIFETIME_}, "
+            local key
+            for key in "${!_BL_CONST[@]}"; do
+                [[ $key == "SETTING_LIFETIME_"* ]] || continue
+                values+=("${_BL_CONST[$key]}")
             done
 
-            expected_values="${expected_values%, }"
-            [[ -n $expected_values ]] && expected_values=" (expected: ${expected_values})"
+            local expected_values
+            _bl_log_get_expected_values values expected_values
 
             message_="invalid lifetime '$3'$expected_values"
             ;;
@@ -644,6 +726,31 @@ _bl_log_use_color() {
         [[ -z ${NO_COLOR-} ]] &&
         [[ $COLOR_MODE != "never" ]]
     )
+}
+
+_bl_log_get_expected_values() {
+
+    local -rn values_=$1
+    local -n expected_values_=$2
+
+    expected_values_=""
+    case ${#values_[@]} in
+        0)
+            ;;
+        1)
+            expected_values_=${values_[0]}
+            ;;
+        2)
+            expected_values_="${values_[0]} or ${values_[1]}"
+            ;;
+        *)
+            printf -v expected_values_ '%s, ' "${values_[@]:0:${#values_[@]}-1}"
+            expected_values_="${expected_values_%, }"
+            expected_values_+=" or ${values_[-1]}"
+            ;;
+    esac
+
+    [[ -n $expected_values_ ]] && expected_values_=" (expected: $expected_values_)"
 }
 
 _bl_log_internal_error() {

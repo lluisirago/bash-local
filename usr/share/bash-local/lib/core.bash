@@ -211,7 +211,7 @@ _bl_core_resolve_prunable_elements() {
             collect_local_elements=true
             collect_scoped_elements=true
         fi
-        _bl_manifest_collect_names_by_scope "$environment" \
+        bl_manifest_collect_names_by_scope "$environment" \
         "$collect_local_elements" "$collect_scoped_elements" \
         aliases_ functions_ variables_
     done

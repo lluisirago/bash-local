@@ -29,15 +29,17 @@
 # @arg $3 string Reference to environment variable validation error code.
 #
 # @exitcode 0 Success.
-# @exitcode 1 Internal validation error.
+# @exitcode 1 Internal validation error (logged in debug).
 # @exitcode 2 Resolved using fallback after ignoring an invalid environment
 #             variable.
-# @exitcode 3 Unknown setting (logged in debug).
+# @exitcode 3 Invalid default value, and the environment variable is either
+#             valid or not set.
+# @exitcode 4 Unknown setting (logged in debug).
 bl_setting_resolve() {
 
     local -r KEY="$1"    
     local -n value_=$2
-    local -n env_var_error=$3
+    local -n error_=$3
 
     value_=""
 
@@ -50,34 +52,53 @@ bl_setting_resolve() {
 
     # 2. Environment variable
     local -r KEY_ENV_VAR="BL_$KEY"
-    local -i status_env_var=0
 
+    local invalid_env_var=false
+    local aux_error
+    
     if [[ -v $KEY_ENV_VAR ]]; then
 
-        bl_setting_validate "$KEY" "${!KEY_ENV_VAR}" env_var_error
+        bl_setting_validate "$KEY" "${!KEY_ENV_VAR}" aux_error
         case $? in
             0)  value_="${!KEY_ENV_VAR}"; return 0;;
             1)  return 1;;
-            2)  status_env_var=2;;
+            2)  value_="${!KEY_ENV_VAR}"; invalid_env_var=true; error_="$aux_error";;
         esac
     fi
-
+    
     # 3. Configuration
     if [[ -n "${_BL_STATE["SETTING_SESSION_$KEY"]:-}" ]]; then
 
         value_="${_BL_STATE["SETTING_SESSION_$KEY"]}"
-        return $status_env_var
+        [[ $invalid_env_var == true ]] && return 2 || return 0
     fi
-
+    
     # 4. Default value
-    if [[ -n "${_BL_CONST["SETTING_DEFAULT_$KEY"]:-}" ]]; then
+    if [[ -v _BL_CONST["SETTING_DEFAULT_$KEY"] ]]; then
 
-        value_="${_BL_CONST["SETTING_DEFAULT_$KEY"]}"
-        return $status_env_var
+        bl_setting_validate "$KEY" "${_BL_CONST["SETTING_DEFAULT_$KEY"]}" aux_error
+        case $? in
+            0)  
+                value_="${_BL_CONST["SETTING_DEFAULT_$KEY"]}"
+                [[ $invalid_env_var == true ]] && return 2 || return 0
+                ;;
+            1)  
+                return 1
+                ;;
+            2)  
+                if [[ $invalid_env_var == true ]]; then
+                    return 2
+                else
+                    value_="${_BL_CONST["SETTING_DEFAULT_$KEY"]}"
+                    error_=$aux_error
+                    return 3
+                fi
+                ;;
+        esac
     fi
 
     bl_log_debug "FATAL_SETTING_RESOLVE_INVALID_SETTING" "${KEY,,}" # (lowercase)
-    return 3
+    return 4
 }
 
 # @description Sets a value to a setting given its lifetime and key.
@@ -246,7 +267,7 @@ _bl_setting_validate_bool() {
 
     if ! [[ $VALUE == true || $VALUE == false ]]; then
 
-        error___=NO_BOOL
+        error___=INVALID_BOOL
         return 1
     fi
 }
@@ -272,15 +293,10 @@ _bl_setting_validate_dir() {
     fi
     
     if [[ ! -d "$VALUE" ]]; then
-        error___="NOT_A_DIR"
+        error___="NOT_DIR"
         return 1
     fi
-    
-    if [[ ! -w "$VALUE" ]]; then
-        error___="NO_PERM"
-        return 1
-    fi
-    
+
     local -r DIR="$(realpath "$VALUE")"
     local -r REAL_HOME="$(realpath "$HOME")"
     
@@ -318,4 +334,48 @@ _bl_setting_validate_enum() {
     
     error___="INVALID_ENUM"
     return 1
+}
+
+
+
+# @description Validates an existing bl environment.
+#
+# If validation succeeds, error code is empty.
+#
+# @arg $1 string Key (uppercase).
+# @arg $2 string Value.
+# @arg $3 string Reference to error code.
+#
+# @exitcode 0 Validation succeeds.
+# @exitcode 1 Validation fails.
+_bl_setting_validate_env() {
+
+    local -r VALUE="$2"
+    local -n error___=$3
+    
+    if [[ ! -d "$VALUE/${_BL_CONST[DIR_BL]}" ]]; then
+        error___="NOT_ENV"
+        return 1
+    fi
+}
+
+# @description Validates a non-existing bl environment.
+#
+# If validation succeeds, error code is empty.
+#
+# @arg $1 string Key (uppercase).
+# @arg $2 string Value.
+# @arg $3 string Reference to error code.
+#
+# @exitcode 0 Validation succeeds.
+# @exitcode 1 Validation fails.
+_bl_setting_validate_new_env() {
+
+    local -r VALUE="$2"
+    local -n error___=$3
+    
+    if [[ -d "$VALUE/${_BL_CONST[DIR_BL]}" ]]; then
+        error___="NOT_ENV"
+        return 1
+    fi
 }
