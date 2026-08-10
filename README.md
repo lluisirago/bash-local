@@ -248,3 +248,13 @@ bash-local is designed to be **unnoticeable**:
 Development is focused on version 1 on `develop` branch.
 
 The core behavior and performance characteristics are considered stable.
+
+
+
+```
+ _              _        _                _
+| |__  __ _ ___| |__    | | ___  ___ __ _| |
+| '_ \/ _` / __| '_ \ __| |/ _ \/ _ / _` | |
+| |_) )(_| \__ \ | | |__| | (_)( (_( (_| | |
+|_.__/\__,_|___/_| |_|  |_|\___/\___\__,_|_|
+```
