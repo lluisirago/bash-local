@@ -29,12 +29,12 @@
 # @arg $3 string Reference to environment variable validation error code.
 #
 # @exitcode 0 Success.
-# @exitcode 1 Internal validation error (logged in debug).
+# @exitcode 1 Internal validation error (logged as internal).
 # @exitcode 2 Resolved using fallback after ignoring an invalid environment
 #             variable.
 # @exitcode 3 Invalid default value, and the environment variable is either
 #             valid or not set.
-# @exitcode 4 Unknown setting (logged in debug).
+# @exitcode 4 Unknown setting (logged as internal).
 bl_setting_resolve() {
 
     local -r KEY="$1"    
@@ -97,7 +97,7 @@ bl_setting_resolve() {
         esac
     fi
 
-    bl_log_debug "FATAL_SETTING_RESOLVE_INVALID_SETTING" "${KEY,,}" # (lowercase)
+    bl_log_internal "failed to resolve setting '${KEY,,}'" # (lowercase)
     return 4
 }
 
@@ -169,7 +169,7 @@ bl_setting_set() {
 # @arg $3 string Reference to error code.
 #
 # @exitcode 0 Validation succeeds.
-# @exitcode 1 Given key type is not defined in `_BL_CONST` (logged in debug).
+# @exitcode 1 Given key type is not defined in `_BL_CONST` (logged as internal).
 # @exitcode 2 Validation fails.
 bl_setting_validate() {
 
@@ -183,7 +183,7 @@ bl_setting_validate() {
     
     # Key
     if ! [[ -v _BL_CONST["SETTING_TYPE_$KEY"] ]]; then
-        bl_log_debug "ERROR_SETTING_VALIDATE_INVALID_KEY" "$MINUS_KEY"
+        bl_log_internal "missing variable '_BL_CONST[SETTING_TYPE_$KEY]'"
         return 1
     fi
     

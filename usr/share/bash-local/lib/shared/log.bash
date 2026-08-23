@@ -75,8 +75,21 @@ bl_log_debug() {
     local message level
     level="${CODE%%_*}"
     
-    _bl_log_debug_translate "$CODE" message "$2" "$3" || level="error"
+    _bl_log_debug_translate "$CODE" message "$2" "$3" || level="ERROR"
     _bl_log_debug_emit "$level" "$message" || return 1
+}
+
+# @description Logs an internal error directly to stderr.
+# 
+# This function does not use the logging system and must not depend on any
+# function that may invoke logging.
+#
+# @arg $1 string Error message.
+#
+# @exitcode 0 Success.
+bl_log_internal() {
+
+    printf 'fatal: %s: %s\n' "${FUNCNAME[1]}" "$1" >&2
 }
 
 # MARK: Log file
@@ -138,8 +151,8 @@ _bl_log_touch() {
 # @arg $2 Message to write.
 #
 # @exitcode 0 Success.
-# @exitcode 1 `_BL_CONST[PATH_LOG]` undefined or empty.
-# @exitcode 2 Log file does not have writing permissions.
+# @exitcode 1 `_BL_CONST[PATH_LOG]` undefined or empty (logged).
+# @exitcode 2 Log file does not have writing permissions (logged).
 _bl_log_write() {
 
     local -r LEVEL="$1"
@@ -149,10 +162,10 @@ _bl_log_write() {
     local -r PID=$$
 
     if ! [[ -n "${_BL_CONST[PATH_LOG]:-}" ]]; then
-        _bl_log_internal_error "missing variable '_BL_CONST[PATH_LOG]'"
+        bl_log_internal "missing variable '_BL_CONST[PATH_LOG]'"
         return 1
     elif ! [[ -w "${_BL_CONST[PATH_LOG]}" ]]; then
-        _bl_log_internal_error "permission denied '${_BL_CONST[PATH_LOG]}'"
+        bl_log_internal "permission denied '${_BL_CONST[PATH_LOG]}'"
         return 2
     fi
     
@@ -366,11 +379,11 @@ _bl_log_emit() {
     local -r MESSAGE="$2"
 
     if ! [[ -v _BL_CONST["LOG_LEVEL_$LEVEL"] ]]; then
-        _bl_log_internal_error "missing variable '_BL_CONST[LOG_LEVEL_$LEVEL]'"
+        bl_log_internal "missing variable '_BL_CONST[LOG_LEVEL_$LEVEL]'"
         return 1
     fi
 
-    _bl_log_write "${_BL_CONST["LOG_LEVEL_$LEVEL"]}" "$MESSAGE"
+    _bl_log_write "${_BL_CONST["LOG_LEVEL_$LEVEL"]}" "$MESSAGE" || return
     
     local color_mode color color_reset
     bl_setting_resolve "COLOR" color_mode error || return 1
@@ -409,10 +422,10 @@ _bl_log_print() {
     local -r MESSAGE="$4"
     
     if ! [[ -v _BL_CONST[LOG_LEVEL_INFO] ]]; then
-        _bl_log_internal_error "missing variable '_BL_CONST[LOG_LEVEL_INFO]'"
+        bl_log_internal "missing variable '_BL_CONST[LOG_LEVEL_INFO]'"
         return 1
     elif ! [[ -v _BL_CONST[LOG_LEVEL_USAGE] ]]; then
-        _bl_log_internal_error "missing variable '_BL_CONST[LOG_LEVEL_USAGE]'"
+        bl_log_internal "missing variable '_BL_CONST[LOG_LEVEL_USAGE]'"
         return 2
     fi
 
@@ -463,15 +476,6 @@ _bl_log_debug_translate() {
         "ERROR_CONFIG_SET_INVALID_SETTING")
             message_="invalid value '$3' for option '$4'"
             ;;
-        "ERROR_SETTING_VALIDATE_INVALID_KEY")
-            message_="key '$3' not found"
-            ;;
-        "ERROR_SETTING_VALIDATE_NOT_CONFIG")
-            message_="key '$3' is not configurable"
-            ;;
-        "ERROR_SETTING_VALIDATE_NO_DEFAULT")
-            message_="setting '$3' does not have default value"
-            ;;
 
         # Fatal
         "FATAL_ADD_RESOLVE_STDIN_NOT_STDIN")
@@ -483,17 +487,11 @@ _bl_log_debug_translate() {
         "FATAL_CREATE_TEMP")
             message_="failed to create temporary file in '$3'"
             ;;
-        "FATAL_EXTERNAL")
-            message_="$3"
-            ;;
         "FATAL_MISSING_VARIABLE")
             message_="required variable '$3' is not defined or is empty"
             ;;
         "FATAL_READ")
             message_="unable to read file '$3'"
-            ;;
-        "FATAL_SETTING_RESOLVE_INVALID_SETTING")
-            message_="failed to resolve setting '$3'"
             ;;
         "FATAL_SETTING_INVALID_LIFETIME")
 
@@ -541,7 +539,7 @@ _bl_log_debug_emit() {
     local -r MESSAGE="$2"
 
     if ! [[ -v _BL_CONST["LOG_LEVEL_$LEVEL"] ]]; then
-        _bl_log_internal_error "missing variable '_BL_CONST[LOG_LEVEL_$LEVEL]'"
+        bl_log_internal "missing variable '_BL_CONST[LOG_LEVEL_$LEVEL]'"
         return 1
     fi
 
@@ -590,10 +588,10 @@ _bl_log_debug_print() {
     local -r MESSAGE="$5"
     
     if ! [[ -v _BL_CONST[LOG_LEVEL_INFO] ]]; then
-        _bl_log_internal_error "missing variable '_BL_CONST[LOG_LEVEL_INFO]'"
+        bl_log_internal "missing variable '_BL_CONST[LOG_LEVEL_INFO]'"
         return 1
     elif ! [[ -v _BL_CONST[LOG_LEVEL_USAGE] ]]; then
-        _bl_log_internal_error "missing variable '_BL_CONST[LG_LEVEL_USAGE]'"
+        bl_log_internal "missing variable '_BL_CONST[LG_LEVEL_USAGE]'"
         return 2
     fi
 
@@ -627,7 +625,7 @@ _bl_log_debug_print() {
 _bl_log_configure_color() {
 
     if ! [[ -v _BL_STATE[LOG_SUPPORTS_COLOR] ]]; then
-        _bl_log_internal_error "missing variable '_BL_CONST[LOG_SUPPORTS_COLOR]'"
+        bl_log_internal "missing variable '_BL_CONST[LOG_SUPPORTS_COLOR]'"
         return 1
     fi
 
@@ -688,12 +686,12 @@ _bl_log_get_color() {
     _bl_log_use_color "$COLOR_MODE" || return 0
 
     if ! [[ -v _BL_CONST[LOG_COLOR_"$LEVEL"] ]]; then
-        _bl_log_internal_error "missing variable '_BL_CONST[LOG_COLOR_$LEVEL]'"
+        bl_log_internal "missing variable '_BL_CONST[LOG_COLOR_$LEVEL]'"
         return 1
     fi
 
     if ! [[ -v _BL_CONST[LOG_COLOR_RESET] ]]; then
-        _bl_log_internal_error "missing variable '_BL_CONST[LOG_COLOR_RESET]'"
+        bl_log_internal "missing variable '_BL_CONST[LOG_COLOR_RESET]'"
         return 2
     fi
 
@@ -751,9 +749,4 @@ _bl_log_get_expected_values() {
     esac
 
     [[ -n $expected_values_ ]] && expected_values_=" (expected: $expected_values_)"
-}
-
-_bl_log_internal_error() {
-
-    printf 'error: %s: %s\n' "${FUNCNAME[1]}" "$1" >&2
 }

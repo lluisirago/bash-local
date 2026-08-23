@@ -183,14 +183,14 @@ declare -ga _BL_STATE_CURRENT_ENVIRONMENTS=()
 # @section Auxiliar functions
 bl_run_external() {
 
-    local err retval
+    local err status
 
     err=$("$@" 2>&1)
-    retval=$?
+    status=$?
 
-    if (( retval != 0 )); then
-        bl_log_debug "FATAL_EXTERNAL" "$err"
-        return "$retval"
+    if (( status != 0 )); then
+        bl_log_internal "$err"
+        return "$status"
     fi
 }
 
