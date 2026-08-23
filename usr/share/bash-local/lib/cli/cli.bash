@@ -199,20 +199,20 @@ bl-add() {
     #           local:alias:deploy="git push" \
     #           scoped:var:SECRET_KEY=xyz \
     #           func:foo="echo 'Hello World'"
-    
+    _bl_cli_trap_return
+
+    local stdin=""
+    [[ ! -t 0 ]] && stdin=$(cat)
+
     local arguments atomic env force help init verbose version
-    _bl_cli_run bl_parse_arguments arguments "$@" || return    
-    _bl_cli_run bl_add_take_in atomic env force help init verbose version
+    bl_parse_arguments arguments "$@" || return
+    bl_add_take_in atomic env force help init verbose version
     case $? in
         1) return 1;;
         2) return 2;;
         3) return 0;;
     esac
-    
-    local stdin=""
-    [[ ! -t 0 ]] && stdin=$(cat)
-
-    _bl_cli_run bl_add_main "$atomic" "$env" "$force" "$stdin" arguments || return
+    bl_add_main "$atomic" "$env" "$force" "$stdin" arguments || return
 }
 
 
@@ -283,15 +283,29 @@ bl-show() {
 # MARK: Auxiliar
 # -----------------------------------------------------------------------------
 # @section Auxiliar functions
-_bl_cli_run() {
 
-    local retval
-    "$@"
-    retval=$?
-    if (( retval != 0 )); then
-        bl_setting_clear "${_BL_CONST[SETTING_LIFETIME_RUNTIME]}"
+_bl_cli_trap_return() {
+
+    local old_trap
+    old_trap=$(trap -p RETURN)
+
+    trap _bl_cli_cleanup_return RETURN
+}
+
+_bl_cli_cleanup_return() {
+
+    local status=$?
+
+    if ! [[ -n "${_BL_CONST[SETTING_LIFETIME_RUNTIME]:-}" ]]; then
+        bl_log_debug "FATAL_MISSING_VARIABLE" "_BL_CONST[SETTING_LIFETIME_RUNTIME]"
+        return 1
     fi
-    return "$retval"
+    bl_setting_clear "${_BL_CONST[SETTING_LIFETIME_RUNTIME]}"
+
+    trap - RETURN
+    [[ -n "${old_trap:-}" ]] && eval "$old_trap"
+
+    return "$status"
 }
 
 _bl_cli_resolve() {
