@@ -34,14 +34,14 @@ bl_add_take_in() {
     local -n version_=$7
     _bl_cli_resolve VERSION version_ || return
     if [[ $version_ == true ]]; then
-        _bl_cli_run bl-version || return # Should be bl_version_main
+        bl-version || return # Should be bl_version_main
         return 3
     fi
     
     local -n help_=$4
     _bl_cli_resolve HELP help_ || return
     if [[ $help_ == true ]]; then
-        _bl_cli_run bl-help "${_BL_CONST[COMMAND_ADD]}" || return # Should be bl_help_main
+        bl-help "${_BL_CONST[COMMAND_ADD]}" || return # Should be bl_help_main
         return 3
     fi
 
@@ -51,7 +51,7 @@ bl_add_take_in() {
     local -n init_=$5
     _bl_cli_resolve INIT init_ || return
     if [[ $init_ == true ]]; then
-        _bl_cli_run bl-init "$env_" || return
+        bl-init "$env_" || return
     fi
 
     local -n atomic_=$1
@@ -92,79 +92,101 @@ bl_add_main() {
     local -rn ARGUMENTS=$5
 
     local -a scopes kinds names source_types sources
-    local stdin_used=false
-    local argument scope kind name source_type source
 
+    local stdin_used=false
+    local atomic_failed=false
+
+    local argument
     for argument in "${ARGUMENTS[@]}"; do
         
-        if ! [[ $argument =~ ${_BL_CONST[ADD_ARGUMENT_REGEX]} ]]; then
-            bl_log "USAGE_INVALID_ARG_FORMAT" "$argument"
-            return 2
-        fi
-
-        _bl_add_extract "$argument" scope kind name source_type source || return 1
-
-        if [[ $source_type == "${_BL_CONST[ADD_SOURCE_TYPE_STDIN]}" ]]; then
-
-            _bl_add_resolve_stdin "$STDIN" source_type source stdin_used
-            case $? in
-                1) return 1;;
-                2) return 2;;
-                3)
-                    if [[ $ATOMIC == true ]]; then
-                        bl_log "FATAL_ATOMIC_FAILED"
-                        return 2
-                    else
-                        continue
-                    fi
-                    ;;
-            esac
-        fi
-
-        _bl_add_handle_conflicts "$ENV" "$name" names
-        case $? in
-            1) return 2;;
-            2)
-                if [[ $ATOMIC == true ]]; then
-                    bl_log "FATAL_ATOMIC_FAILED"
-                    return 2
-                else
-                    continue
-                fi
-                ;;
-        esac
-        
-        _bl_add_validate "$scope" "$kind" "$name" "$source_type" "$source"
+        _bl_add_process_argument "$argument" \
+            scopes kinds names source_types sources stdin_used
         case $? in
             1) return 1;;
-            2)
+            2) return 2;;
+            3)
                 if [[ $ATOMIC == true ]]; then
-                    bl_log "FATAL_ATOMIC_FAILED"
-                    return 2
+                    atomic_failed=true
                 else
                     continue
                 fi
                 ;;
         esac
-        
-        # Argument traits OK to this point (except for EDITOR source type)
-
-        # - Add into valid args array:
-        scopes+=("$scope")
-        kinds+=("$kind")
-        names+=("$name")
-        source_types+=("$source_type")
-        sources+=("$source")
     done
 
+    [[ $atomic_failed == true ]] && { bl_log "FATAL_ATOMIC_FAILED"; return 2; }
     [[ $stdin_used == false && -n "$STDIN" ]] && bl_log "WARN_IGNORING_STDIN"
 
-    #_bl_add_resolve_editor
+    _bl_add_resolve_editor scopes kinds names source_types sources || return
 
-    # - Add valid args into environment
+    # Add elements into environment
+
     _bl_add_summarize "${#names[@]}" "${#ARGUMENTS[@]}"
 }
 
+
+# MARK: Private
+# -----------------------------------------------------------------------------
+# @section Private funtions
+#
+# Functions in this section are not intended to be called by other modules.
+
+# @description Processes an argument by extracting its traits and appending
+# them into given arrays if valid.
+#
+# Stdin acts as source for element if defined with `-`.
+#
+# @arg $1 string Argument.
+# @arg $2 array Reference to scopes array.
+# @arg $3 array Reference to kinds array.
+# @arg $4 array Reference to names array.
+# @arg $5 array Reference to source types array.
+# @arg $6 array Reference to sources array.
+# @arg $7 string Reference to stdin flag.
+#
+# @exitcode 0 Success.
+# @exitcode 1 Internal error (logged in debug).
+# @exitcode 2 User-related fatal error (logged).
+# @exitcode 3 User-related error (logged).
+_bl_add_process_argument() {
+
+    local -r ARGUMENT="$1"
+    local -n scopes_=$2
+    local -n kinds_=$3
+    local -n names_=$4
+    local -n source_types_=$5
+    local -n sources_=$6
+    local -n stdin_used_=$7
+
+    if ! [[ -n "${_BL_CONST[ADD_ARGUMENT_REGEX]:-}" ]]; then
+        bl_log_debug "FATAL_MISSING_VARIABLE" "_BL_CONST[ADD_ARGUMENT_REGEX]"
+        return 1
+    elif ! [[ -n "${_BL_CONST[ADD_SOURCE_TYPE_STDIN]:-}" ]]; then
+        bl_log_debug "FATAL_MISSING_VARIABLE" "_BL_CONST[ADD_SOURCE_TYPE_STDIN]"
+        return 1
+    fi
+
+    if ! [[ $ARGUMENT =~ ${_BL_CONST[ADD_ARGUMENT_REGEX]} ]]; then
+        bl_log "USAGE_INVALID_ARG_FORMAT" "$ARGUMENT"
+        return 2
+    fi
+
+    local scope kind name source_type source
+    _bl_add_extract "$ARGUMENT" scope kind name source_type source || return
+
+    if [[ $source_type == "${_BL_CONST[ADD_SOURCE_TYPE_STDIN]}" ]]; then
+        _bl_add_resolve_stdin "$STDIN" source_type source stdin_used_ || return
+    fi
+
+    _bl_add_handle_conflicts "$ENV" "$name" names_ || return
+    _bl_add_validate "$scope" "$kind" "$name" "$source_type" "$source" || return
+    
+    scopes_+=("$scope")
+    kinds_+=("$kind")
+    names_+=("$name")
+    source_types_+=("$source_type")
+    sources_+=("$source")
+}
 
 # MARK: Extract
 # -----------------------------------------------------------------------------
@@ -184,8 +206,7 @@ bl_add_main() {
 # @arg $6 string Reference to source.
 #
 # @exitcode 0 Success.
-# @exitcode 1 Left side extraction failed (logged in debug).
-# @exitcode 2 Right side extraction failed (logged in debug).
+# @exitcode 1 Extraction failed (logged in debug).
 _bl_add_extract() {
 
     local -r ARGUMENT="$1"
@@ -205,8 +226,8 @@ _bl_add_extract() {
         right=""
     fi
 
-    _bl_add_extract_left "$left" scope_ kind_ name_ || return 1
-    _bl_add_extract_right "$right" source_type_ source_ || return 2
+    _bl_add_extract_left "$left" scope_ kind_ name_ || return
+    _bl_add_extract_right "$right" source_type_ source_ || return
 }
 
 # @description Extracts scope, kind and name from left side of argument.
@@ -383,22 +404,22 @@ _bl_add_resolve_stdin() {
 # @arg $3 array Constant reference to element names array.
 #
 # @exitcode 0 No name conflict.
-# @exitcode 1 Argument conflict.
-# @exitcode 2 Environment conflict.
+# @exitcode 2 Argument conflict (logged).
+# @exitcode 3 Environment conflict (logged).
 _bl_add_handle_conflicts() {
 
     local -r ENV="$1"
     local -r NAME="$2"
-    local -rn names_=$3
+    local -rn NAMES=$3
     
-    if _bl_add_argument_conflict "$NAME" names_; then
+    if _bl_add_argument_conflict "$NAME" NAMES; then
         bl_log "FATAL_DUPLICATE" "$NAME"
-        return 1
+        return 2
     fi
      
     if _bl_add_environment_conflict "$NAME" "$ENV"; then
         bl_log "ERROR_ALREADY_EXISTS" "$NAME" "$ENV"
-        return 2
+        return 3
     fi
 }
 
@@ -413,10 +434,10 @@ _bl_add_handle_conflicts() {
 _bl_add_argument_conflict() {
 
     local -r NAME="$1"
-    local -rn names__=$2
+    local -rn NAMES_=$2
 
     local name
-    for name in "${names__[@]}"; do
+    for name in "${NAMES_[@]}"; do
         [[ $NAME == "$name" ]] && return 0
     done
     return 1
@@ -466,7 +487,7 @@ _bl_add_environment_conflict() {
 #
 # @exitcode 0 Success
 # @exitcode 1 Internal error (logged in debug).
-# @exitcode 2 User-related error/s (logged).
+# @exitcode 3 User-related error/s (logged).
 _bl_add_validate() {
 
     local -r SCOPE="$1"
@@ -521,7 +542,7 @@ _bl_add_validate() {
     
     if (( ${#errors[@]} > 0 )); then
         _bl_add_report_errors "$NAME" errors firsts seconds
-        return 2
+        return 3
     else
         return 0
     fi
@@ -609,9 +630,9 @@ _bl_add_validate_source() {
     local -r KIND="$1"
     local -r SOURCE_TYPE="$2"
     local -r SOURCE="$3"
-    local -n error_=$4
+    local -n source_error_=$4
     
-    error_=""
+    source_error_=""
 
     if [[ $SOURCE_TYPE == "${_BL_CONST[ADD_SOURCE_TYPE_INLINE]}" ]]; then
 
@@ -619,13 +640,13 @@ _bl_add_validate_source() {
             "${_BL_CONST[SCHEMA_KIND_ALIAS]}") ;;
             "${_BL_CONST[SCHEMA_KIND_FUNCTION]}")
 
-                error_=$(bash -n -c "_() {
+                source_error_=$(bash -n -c "_() {
                         $SOURCE
                     }" 2>&1)
-                local -r RETVAL=$?
+                local -r STATUS=$?
 
-                if (( RETVAL != 0 )); then
-                    _bl_add_normalize_source_error error_
+                if (( STATUS != 0 )); then
+                    _bl_add_normalize_source_error source_error_
                     return 1
                 fi
                 ;;
@@ -640,24 +661,24 @@ _bl_add_validate_source() {
             "${_BL_CONST[SCHEMA_KIND_ALIAS]}") ;;
             "${_BL_CONST[SCHEMA_KIND_FUNCTION]}")
                 
-                error_=$(
+                source_error_=$(
                     {
                         printf '_() {\n'
                         cat "$SOURCE"
                         printf '\n}\n'
                     } | bash -n 2>&1
                 )
-                local -r RETVAL=$?
+                local -r STATUS=$?
                 
-                if (( RETVAL != 0 )); then
-                    _bl_add_normalize_source_error error_
+                if (( STATUS != 0 )); then
+                    _bl_add_normalize_source_error source_error_
                     return 3
                 fi
                 ;;
             "${_BL_CONST[SCHEMA_KIND_VARIABLE]}") ;;
         esac
     elif [[ $SOURCE_TYPE == "${_BL_CONST[ADD_SOURCE_TYPE_EDITOR]}" ]]; then
-        tr
+        true
     else
         return 4
     fi
@@ -700,11 +721,11 @@ _bl_add_report_errors() {
 # @exitcode 0 Success.
 _bl_add_normalize_source_error () {
 
-    local -n error__=$1
+    local -n error=$1
 
     # Remove all bash: -c: and bash: appearances
-    error__=${error__//bash: -c: /}
-    error__=${error__//bash: }
+    error=${error//bash: -c: /}
+    error=${error//bash: }
     
     # Substract 1 to error lines
     new_error=""
@@ -715,11 +736,11 @@ _bl_add_normalize_source_error () {
         fi
         new_error+="$line"$'\n'
 
-    done <<< "$error__"
-    error__=${new_error%$'\n'}
+    done <<< "$error"
+    error=${new_error%$'\n'}
 
     # Pretty-print
-    _bl_add_normalize_error error_
+    _bl_add_normalize_error error
 }
 
 # @description Normalizes error format by removing last line break and indenting
@@ -734,23 +755,85 @@ _bl_add_normalize_source_error () {
 # @exitcode 0 Success.
 _bl_add_normalize_error () {
 
-    local -n error___=$1
+    local -n error_=$1
 
     # Remove last line break
-    error___=${error___%$'\n'}
+    error_=${error_%$'\n'}
 
     # Check if multiple-line error
-    if [[ $error___ == *$'\n'* ]]; then
+    if [[ $error_ == *$'\n'* ]]; then
         
         # Add line break at beginning and indent with two spaces before each
         # line
-        error___=$'\n'"  ${error___//$'\n'/$'\n  '}"
+        error_=$'\n'"  ${error_//$'\n'/$'\n  '}"
     else
         # Indent with one space
-        error___=" $error___"
+        error_=" $error_"
     fi
 }
 
+
+# MARK: Editor
+# -----------------------------------------------------------------------------
+# @section Editor resolution
+#
+# Functions in this section resolves editor source.
+
+_bl_add_resolve_editor() {
+
+    local -rn scopes_=$1
+    local -rn kinds_=$2
+    local -rn names_=$3
+    local -rn source_types_=$4
+    local -rn sources_=$5
+
+    local -a scopes=("${scopes_[@]}")
+    local -a kinds=("${kinds_[@]}")
+    local -a names=("${names_[@]}")
+    local -a source_types=("${source_types_[@]}")
+    local -a sources=("${sources_[@]}")
+
+    # Get EDITOR source type elements
+
+    local -r TMP=$(mktemp)
+    printf "Editor file: %s\nContent:\n" "$TMP"
+
+    _bl_add_trap_editor_return "$TMP"
+
+    # Write comments and sections in file
+    cat >"$TMP" <<'EOF'
+# Define the requested items below.
+# Save and exit when finished.
+EOF
+
+
+    cat "$TMP"
+    # Get editor
+
+    # Open editor with `"$editor" "$TMP"`
+
+    # Parse temp file
+
+    # Set source types to inline and sources in refs
+}
+
+_bl_add_trap_editor_return() {
+
+    local -r TMP="$1"
+
+    local old_trap_
+    old_trap_=$(trap -p RETURN)
+    
+    # shellcheck disable=SC2329
+    cleanup_return() {
+        local status=$?
+        rm -rf -- "$TMP"
+        trap - RETURN
+        [[ -n "${old_trap_:-}" ]] && eval "$old_trap_"
+        return "$status"
+    }
+    trap cleanup_return RETURN
+}
 
 # MARK: Summary
 # -----------------------------------------------------------------------------
@@ -777,8 +860,10 @@ _bl_add_summarize() {
     local -ri NUM_FAILED=$(( NUM_REQUESTED - NUM_ADDED ))
     
     if (( NUM_FAILED > 0 && NUM_ADDED > 0 )); then
-        bl_log "INFO_ADD_SUMMARY_SOME" "$NUM_ADDED" "$NUM_REQUESTED" || return 1
+        bl_log "INFO_ADD_SUMMARY_SOME" "$NUM_ADDED" "$NUM_REQUESTED"
     elif (( NUM_FAILED > 0 && NUM_ADDED == 0 )); then
-        bl_log "INFO_ADD_SUMMARY_NONE" || return 1
+        bl_log "INFO_ADD_SUMMARY_NONE"
     fi
+
+    return 0
 }
