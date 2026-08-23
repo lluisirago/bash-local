@@ -94,7 +94,6 @@ _bl_config_parse() {
     fi
 
     local lineno=0
-    local retval=0
 
     while IFS= read -r line; do
       
