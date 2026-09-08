@@ -193,7 +193,7 @@ bl-add() {
     #  - @file       Read from file
     #  - -           Read from stdin
     #
-    # If omitted opens the editor (nano by default).
+    # If omitted opens the editor (vi by default).
     #
     # Usage:    bl add (local:var: by default)DB_USER=admin \
     #           local:alias:deploy="git push" \
@@ -204,15 +204,15 @@ bl-add() {
     local stdin=""
     [[ ! -t 0 ]] && stdin=$(cat)
 
-    local arguments atomic env force help init verbose version
+    local arguments env
     bl_parse_arguments arguments "$@" || return
-    bl_add_take_in atomic env force help init verbose version
+    bl_add_take_in env
     case $? in
         1) return 1;;
         2) return 2;;
         3) return 0;;
     esac
-    bl_add_main "$atomic" "$env" "$force" "$stdin" arguments || return
+    bl_add_main "$env" "$stdin" arguments || return
 }
 
 
@@ -308,7 +308,7 @@ _bl_cli_cleanup_return() {
     return "$status"
 }
 
-_bl_cli_resolve() {
+bl_cli_resolve() {
 
     local -r KEY="$1"
     local -n value=$2
@@ -321,7 +321,7 @@ _bl_cli_resolve() {
         0) [[ $TYPE == "dir" ]] && value="$(realpath "$value")"; return 0;;
         1) return 1;;
         2) bl_log "FATAL_INVALID_ENV_VAR" "$KEY" "$error"; return 2;;
-        3) [[ $TYPE == "dir" ]] && value="$(realpath "$value")"; bl_log "FATAL_$error" "$value"; return 2;;
+        3) [[ $TYPE == "dir" ]] && value="$(realpath "$value")"; bl_log "FATAL_DEFAULT_$error" "$value" "$KEY"; return 2;;
         4) return 1;;
     esac
 }

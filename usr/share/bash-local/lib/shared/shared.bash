@@ -29,12 +29,21 @@ declare -gr _BL_SHARED_LOADED=1
 declare -gA _BL_CONST=(
 
     [ADD_ARGUMENT_REGEX]='^([^:=]+:){0,2}[^:=]+(=(-|@.+|[^@].*|))?$'
+    [ADD_EDITOR_TEMPLATE_HEADER]="# Define the requested elements below."$'\n'"# Save and exit when finished."
+    [ADD_EDITOR_TEMPLATE_PROMPT_BEGIN]=">>>"
+    [ADD_EDITOR_TEMPLATE_PROMPT_END]="<<<"
     [ADD_SHELL_ID_REGEX]='^[a-zA-Z_][a-zA-Z0-9_]*$'
     [ADD_SOURCE_TYPE_EDITOR]=EDITOR
     [ADD_SOURCE_TYPE_FILE]=FILE
     [ADD_SOURCE_TYPE_INLINE]=INLINE
     [ADD_SOURCE_TYPE_STDIN]=STDIN
 
+    # Editor argument
+    [ARG_OF_code]=--wait
+    [ARG_OF_code-insiders]=--wait
+    [ARG_OF_codium]=--wait
+    [ARG_OF_subl]=--wait
+    
     # bl commands
     [COMMAND_ADD]=add
     [COMMAND_CONFIG]=config
@@ -45,9 +54,6 @@ declare -gA _BL_CONST=(
 
     # Config module
     [CONFIG_PARSE_REGEX]='^[[:space:]]*([[:alnum:]_-]+)[[:space:]]*=[[:space:]]*(.*)$'
-    [CONFIG_SCHEMA_COLOR]=color
-    [CONFIG_SCHEMA_DEBUG]=debug
-    [CONFIG_SCHEMA_VERBOSE]=verbose
 
     # Directories
     [DIR_BL]=.bl/
@@ -68,12 +74,13 @@ declare -gA _BL_CONST=(
     [LOG_COLOR_RESET]='\033[0m'    # None (to reset)
     [LOG_COLOR_USAGE]='\033[0m'    # None
     [LOG_COLOR_WARN]='\033[33m'    # Yellow
+    [LOG_FILE_MAX_SIZE]=1048576 # 1MB
     [LOG_LEVEL_ERROR]=error
     [LOG_LEVEL_FATAL]=fatal
     [LOG_LEVEL_INFO]=info
     [LOG_LEVEL_USAGE]=usage
     [LOG_LEVEL_WARN]=warning
-    [LOG_INIT_MAX_SIZE]=1048576 # 1MB
+    [LOG_VALUES_MAX_SIZE]=5
 
     # Schema
     [SCHEMA_KIND_ALIAS]=alias
@@ -86,13 +93,14 @@ declare -gA _BL_CONST=(
     [SETTING_DEFAULT_ATOMIC]=false
     [SETTING_DEFAULT_COLOR]=auto
     [SETTING_DEFAULT_DEBUG]=true # Change before deployment
+    [SETTING_DEFAULT_EDITOR]=vi
     [SETTING_DEFAULT_ENV]=./
     [SETTING_DEFAULT_FORCE]=false
     [SETTING_DEFAULT_HELP]=false
     [SETTING_DEFAULT_INIT]=false
-    [SETTING_DEFAULT_VERBOSE]=false
     [SETTING_DEFAULT_VERSION]=false
 
+    [SETTING_ENUM_EDITOR]="code code-insiders codium emacs helix hx kak kakoune micro nano nvim subl vi vim" # Update 'add.bash: _bl_add_get_editor_arg' if changed
     [SETTING_ENUM_COLOR]="always auto never"
 
     [SETTING_LIFETIME_RUNTIME]=RUNTIME
@@ -102,26 +110,25 @@ declare -gA _BL_CONST=(
     [SETTING_OF_-d]=ENV
     [SETTING_OF_-f]=FORCE
     [SETTING_OF_-h]=HELP
-    [SETTING_OF_-v]=VERBOSE
     [SETTING_OF_-V]=VERSION
     [SETTING_OF_--atomic]=ATOMIC
     [SETTING_OF_--color]=COLOR
     [SETTING_OF_--cwd]=ENV
     [SETTING_OF_--dir]=ENV
+    [SETTING_OF_--editor]=EDITOR
     [SETTING_OF_--force]=FORCE
     [SETTING_OF_--help]=HELP
     [SETTING_OF_--init]=INIT
-    [SETTING_OF_--verbose]=VERBOSE
     [SETTING_OF_--version]=VERSION
 
     [SETTING_TYPE_ATOMIC]=bool
     [SETTING_TYPE_COLOR]=enum
     [SETTING_TYPE_DEBUG]=bool
+    [SETTING_TYPE_EDITOR]=enum
     [SETTING_TYPE_ENV]=dir
     [SETTING_TYPE_FORCE]=bool
     [SETTING_TYPE_HELP]=bool
     [SETTING_TYPE_INIT]=bool
-    [SETTING_TYPE_VERBOSE]=bool
     [SETTING_TYPE_VERSION]=bool
 
     # bl-version
@@ -158,18 +165,18 @@ declare -gA _BL_STATE=(
     # Settings
     [SETTING_RUNTIME_ATOMIC]=""
     [SETTING_RUNTIME_COLOR]=""
-    [SETTING_RUNTIME_ENV]=""
     [SETTING_RUNTIME_DEBUG]=""
+    [SETTING_RUNTIME_EDITOR]=""
+    [SETTING_RUNTIME_ENV]=""
     [SETTING_RUNTIME_FORCE]=""
     [SETTING_RUNTIME_HELP]=""
     [SETTING_RUNTIME_INIT]=""
-    [SETTING_RUNTIME_VERBOSE]=""
     [SETTING_RUNTIME_VERSION]=""
 
     [SETTING_SESSION_ATOMIC]=""
     [SETTING_SESSION_COLOR]=""
     [SETTING_SESSION_DEBUG]=""
-    [SETTING_SESSION_VERBOSE]=""
+    [SETTING_SESSION_EDITOR]=""
 
     # Log colors
     [LOG_SUPPORTS_COLOR]=true
@@ -194,30 +201,9 @@ bl_run_external() {
     fi
 }
 
-bl_atomic_write() {
-
-    local -rn LINES=$1
-    local -r FILE="$2"
-
-    local -r DIR=${FILE%/*}
-    local tmp
-    if ! tmp="$(mktemp "$DIR/.tmp.XXXXXX")"; then
-        bl_log_debug "FATAL_CREATE_TEMP" "$DIR"
-        return 1
-    fi
-    if ! printf '%s\n' "${LINES[@]}" > "$tmp"; then
-        bl_log_debug "FATAL_WRITE" "$tmp"
-        rm -f -- "$tmp"
-        return 2
-    fi  
-    bl_run_external mv -f -- "$tmp" "$FILE" || { rm -f -- "$tmp"; return 3; }
-}
-
 
 # MARK: Modules
 # -----------------------------------------------------------------------------
 # @section Source modules
 source "$(dirname "${BASH_SOURCE[0]}")/setting.bash"
-source "$(dirname "${BASH_SOURCE[0]}")/config.bash"
 source "$(dirname "${BASH_SOURCE[0]}")/log.bash"
-source "$(dirname "${BASH_SOURCE[0]}")/manifest.bash"

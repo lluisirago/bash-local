@@ -4,10 +4,11 @@
 #
 # @brief This script acts as an entry-point for bash-local.
 # @description It is sourced when a new terminal session starts. Sources the
-# the context definition and shared modules (shared.bash), the internal core API
-# (core.bash) and the CLI (cli.bash).
+# the context definition and shared modules (shared.bash), the file managers
+# (file.bash), the internal core API (core.bash) and the CLI (cli.bash).
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib/shared/shared.bash"
+source "$(dirname "${BASH_SOURCE[0]}")/lib/file/file.bash"
 source "$(dirname "${BASH_SOURCE[0]}")/lib/core.bash"
 source "$(dirname "${BASH_SOURCE[0]}")/lib/cli/cli.bash"
 

@@ -70,7 +70,11 @@ bl_setting_resolve() {
     if [[ -n "${_BL_STATE["SETTING_SESSION_$KEY"]:-}" ]]; then
 
         value_="${_BL_STATE["SETTING_SESSION_$KEY"]}"
-        [[ $invalid_env_var == true ]] && return 2 || return 0
+        if [[ $invalid_env_var == true ]];then
+            return 2
+        else
+            return 0
+        fi
     fi
     
     # 4. Default value
@@ -286,6 +290,8 @@ _bl_setting_validate_dir() {
 
     local -r VALUE="$2"
     local -n error___=$3
+
+    error___=""
     
     if [[ -z "$VALUE" ]]; then
         error___="NO_DIR"
@@ -337,6 +343,12 @@ _bl_setting_validate_enum() {
 }
 
 
+# MARK: Validate 2
+# -----------------------------------------------------------------------------
+# @section Specific validators
+#
+# Functions in this section validate key-value settings depending on the
+# setting.
 
 # @description Validates an existing bl environment.
 #
@@ -352,6 +364,8 @@ _bl_setting_validate_env() {
 
     local -r VALUE="$2"
     local -n error___=$3
+
+    error___=""
     
     if [[ ! -d "$VALUE/${_BL_CONST[DIR_BL]}" ]]; then
         error___="NOT_ENV"
@@ -373,9 +387,34 @@ _bl_setting_validate_new_env() {
 
     local -r VALUE="$2"
     local -n error___=$3
+
+    error___=""
     
     if [[ -d "$VALUE/${_BL_CONST[DIR_BL]}" ]]; then
-        error___="NOT_ENV"
+        error___="IS_ENV"
+        return 1
+    fi
+}
+
+# @description Validates an installed editor.
+#
+# If validation succeeds, error code is empty.
+#
+# @arg $1 string Key (uppercase).
+# @arg $2 string Value.
+# @arg $3 string Reference to error code.
+#
+# @exitcode 0 Validation succeeds.
+# @exitcode 1 Validation fails.
+_bl_setting_validate_editor() {
+
+    local -r VALUE="$2"
+    local -n error___=$3
+
+    error___=""
+
+    if ! command -v "$VALUE" >/dev/null 2>&1; then
+        error___="EDITOR_NOT_INSTALLED"
         return 1
     fi
 }

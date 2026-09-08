@@ -38,7 +38,7 @@
 # - `_BL_STATE[PPD]`:
 #     Previous working directory.
 
-# MARK: HOOK
+# MARK: Hook
 # -----------------------------------------------------------------------------
 # @section Environment synchronization for `cd` hook
 

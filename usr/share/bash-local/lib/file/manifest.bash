@@ -38,63 +38,59 @@
 # @exitcode 2 Manifest file does not exist.
 # @exitcode 3 Manifest file does not have reading permissions.
 # @exitcode 4 Reading manifest file failed.
-    bl_manifest_collect_traits_by_name() {
-        
-        local -r ENVIRONMENT="$1"
-        local -rn NAMES=$2
-        local -n linenos_=$3
-        local -n scopes_=$4
-        local -n kinds_=$5
-        local -n starts_=$6
-        local -n ends_=$7
+bl_manifest_collect_traits_by_name() {
+    
+    local -r ENVIRONMENT="$1"
+    local -rn NAMES=$2
+    local -n linenos_=$3
+    local -n scopes_=$4
+    local -n kinds_=$5
+    local -n starts_=$6
+    local -n ends_=$7
 
-        [[ "${#NAMES[@]}" -ne 0 ]] || return 0
-        
-        if ! [[ -n "${_BL_CONST[PATH_MANIFEST]:-}" ]]; then
-            bl_log_debug "FATAL_MISSING_VARIABLE" "_BL_CONST[PATH_MANIFEST]"
-            return 1
-        elif ! [[ -f "$ENVIRONMENT/${_BL_CONST[PATH_MANIFEST]}" ]]; then
-            bl_log "FATAL_NOT_FILE" "$ENVIRONMENT/${_BL_CONST[PATH_MANIFEST]}"
-            return 2
-        elif ! [[ -r "$ENVIRONMENT/${_BL_CONST[PATH_MANIFEST]}" ]]; then
-            bl_log "FATAL_NO_PERM" "$ENVIRONMENT/${_BL_CONST[PATH_MANIFEST]}"
-            return 3
+    [[ "${#NAMES[@]}" -ne 0 ]] || return 0
+    
+    if ! [[ -n "${_BL_CONST[PATH_MANIFEST]:-}" ]]; then
+        bl_log_debug "FATAL_MISSING_VARIABLE" "_BL_CONST[PATH_MANIFEST]"
+        return 1
+    elif ! [[ -f "$ENVIRONMENT/${_BL_CONST[PATH_MANIFEST]}" ]]; then
+        bl_log "FATAL_NOT_FILE" "$ENVIRONMENT/${_BL_CONST[PATH_MANIFEST]}"
+        return 2
+    elif ! [[ -r "$ENVIRONMENT/${_BL_CONST[PATH_MANIFEST]}" ]]; then
+        bl_log "FATAL_NO_PERM" "$ENVIRONMENT/${_BL_CONST[PATH_MANIFEST]}"
+        return 3
+    fi
+
+    local -r MANIFEST="$ENVIRONMENT/${_BL_CONST[PATH_MANIFEST]}"
+
+    local -a MANIFEST_LINES
+    bl_file_read_lines "$MANIFEST" MANIFEST_LINES || return 5
+
+    # Turn MANIFEST_LINES array into map for faster lookup
+    local -A elements
+    local lineno name scope kind start end
+    local -i i
+    for (( i = 1; i < ${#MANIFEST_LINES[@]}; i++ )); do
+
+        read -r name scope kind start end <<< "${MANIFEST_LINES[i]}"
+        elements["$name"]="$i $scope $kind $start $end"
+    done
+
+    # Collect elements from map
+    for (( i = 0; i < "${#NAMES[@]}"; i++)); do
+
+        # Check if element exists
+        if [[ -v "elements[${NAMES[i]}]" ]]; then
+            read -r lineno scope kind start end <<< "${elements[${NAMES[i]}]}"
+
+            linenos_[i]="$lineno"
+            scopes_[i]="$scope"
+            kinds_[i]="$kind"
+            starts_[i]="$start"
+            ends_[i]="$end"
         fi
-
-        local -r MANIFEST="$ENVIRONMENT/${_BL_CONST[PATH_MANIFEST]}"
-
-        # Map manifest into MANIFEST_LINES array
-        local -a MANIFEST_LINES
-        if ! mapfile -t MANIFEST_LINES < "$MANIFEST"; then
-            bl_log_debug "FATAL_READ" "$MANIFEST"
-            return 5
-        fi
-
-        # Turn MANIFEST_LINES array into map for faster lookup
-        local -A elements
-        local lineno name scope kind start end
-        local -i i
-        for (( i = 1; i < ${#MANIFEST_LINES[@]}; i++ )); do
-
-            read -r name scope kind start end <<< "${MANIFEST_LINES[i]}"
-            elements["$name"]="$i $scope $kind $start $end"
-        done
-
-        # Collect elements from map
-        for (( i = 0; i < "${#NAMES[@]}"; i++)); do
-
-            # Check if element exists
-            if [[ -v "elements[${NAMES[i]}]" ]]; then
-                read -r lineno scope kind start end <<< "${elements[${NAMES[i]}]}"
-
-                linenos_[i]="$lineno"
-                scopes_[i]="$scope"
-                kinds_[i]="$kind"
-                starts_[i]="$start"
-                ends_[i]="$end"
-            fi
-        done
-    }
+    done
+}
 
 # @description Collects names of elements in an environment's manifest for given
 # scopes.
@@ -179,13 +175,16 @@ bl_manifest_collect_names_by_scope() {
 # @arg $6 array  Constant reference to ending lines array.
 #
 # @exitcode 0 Success.
-# @exitcode 1 Arrays ($2-$6) have a different number of elements.
-# @exitcode 2 `_BL_CONST[PATH_MANIFEST]` is not defined or is empty.
-# @exitcode 3 Manifest file does not exist.
-# @exitcode 4 Manifest file does not have reading or writing permissions.
-# @exitcode 5 Reading manifest file failed.
-# @exitcode 6 Writing in manifest file failed.
-_bl_manifest_append_by_traits() {
+# @exitcode 1 Arrays ($2-$6) have a different number of elements (logged in
+# debug).
+# @exitcode 2 `_BL_CONST[PATH_MANIFEST]` is not defined or is empty (logged in
+# debug).
+# @exitcode 3 Manifest file does not exist (logged).
+# @exitcode 4 Manifest file does not have reading or writing permissions
+# (logged).
+# @exitcode 5 Reading manifest file failed (logged in debug).
+# @exitcode 6 Writing in manifest file failed (logged in debug).
+bl_manifest_append_by_traits() {
     
     local -r ENVIRONMENT="$1"
     local -rn NAMES=$2
@@ -219,26 +218,18 @@ _bl_manifest_append_by_traits() {
 
     local -r MANIFEST="$ENVIRONMENT/${_BL_CONST[PATH_MANIFEST]}"
 
-    # Map manifest into MANIFEST_LINES array
     local -a MANIFEST_LINES
-    if ! mapfile -t MANIFEST_LINES < "$MANIFEST"; then
-        bl_log_debug "FATAL_READ" "$MANIFEST"
-        return 5
-    fi
+    bl_file_read_lines "$MANIFEST" MANIFEST_LINES || return 5
 
     local -i i
-    for (( i = 0; i < ${#NAMES[@]}; i++ )); do
+    for (( i = 0; i < size; i++ )); do
 
         local scoped_offset="${MANIFEST_LINES[0]}"
 
         # Turn traits into single line
         local element_line
         printf -v element_line '%s %s %s %s %s' \
-            "${NAMES[i]}" \
-            "${SCOPES[i]}" \
-            "${KINDS[i]}" \
-            "${STARTS[i]}" \
-            "${ENDS[i]}"
+            "${NAMES[i]}" "${SCOPES[i]}" "${KINDS[i]}" "${STARTS[i]}" "${ENDS[i]}"
 
         if [[ "${SCOPES[i]}" == "${_BL_CONST[SCHEMA_SCOPE_LOCAL]}" ]]; then
 
@@ -257,7 +248,7 @@ _bl_manifest_append_by_traits() {
         fi
     done
     
-    bl_atomic_write MANIFEST_LINES "$MANIFEST" || return 6
+    bl_file_write_atomic MANIFEST_LINES "$MANIFEST" || return 6
 }
 
 
@@ -277,12 +268,13 @@ _bl_manifest_append_by_traits() {
 # @arg $2 array  Constant reference to line numbers array.
 #
 # @exitcode 0 Success.
-# @exitcode 1 `_BL_CONST[PATH_MANIFEST]` is not defined or is empty.
-# @exitcode 2 Manifest file does not exist.
-# @exitcode 3 Manifest file does not have reading permissions.
-# @exitcode 4 Reading manifest file failed.
-# @exitcode 5 Writing in manifest file failed.
-_bl_manifest_remove_by_lineno() {
+# @exitcode 1 `_BL_CONST[PATH_MANIFEST]` is not defined or is empty (logged in
+# debug).
+# @exitcode 2 Manifest file does not exist (logged).
+# @exitcode 3 Manifest file does not have reading permissions (logged).
+# @exitcode 4 Reading manifest file failed (logged in debug).
+# @exitcode 5 Writing in manifest file failed (logged in debug).
+bl_manifest_remove_by_lineno() {
     
     local -r ENVIRONMENT="$1"
     local -rn LINENOS=$2
@@ -302,12 +294,8 @@ _bl_manifest_remove_by_lineno() {
 
     local -r MANIFEST="$ENVIRONMENT/${_BL_CONST[PATH_MANIFEST]}"
 
-    # Map manifest into MANIFEST_LINES array
     local -a MANIFEST_LINES
-    if ! mapfile -t MANIFEST_LINES < "$MANIFEST"; then
-        bl_log_debug "FATAL_READ" "$MANIFEST"
-        return 4
-    fi
+    bl_file_read_lines "$MANIFEST" MANIFEST_LINES || return 4
 
     local -i i
     for (( i = 0; i < ${#LINENOS[@]}; i++ )); do
@@ -328,5 +316,5 @@ _bl_manifest_remove_by_lineno() {
         fi
     done
     
-    bl_atomic_write MANIFEST_LINES "$MANIFEST" || return 5
+    bl_file_write_atomic MANIFEST_LINES "$MANIFEST" || return 5
 }
