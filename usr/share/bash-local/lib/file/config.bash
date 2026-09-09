@@ -35,10 +35,51 @@ bl_config_refresh() {
 bl_config_load() {
 
     local -a keys values
-
+    
+    _bl_config_touch || return 1
     _bl_config_parse keys values || return 1
     _bl_config_set keys values || return 1
 }
+
+
+# MARK: Touch
+# -----------------------------------------------------------------------------
+# @section Configuration file touch
+#
+# Functions in this section create configuration file if does not exist.
+
+# @description Touches config file.
+#
+# Config file is created if does not exist.
+#
+# Side effects:
+# - Touches config file in `_BL_CONST[DIR_CONFIG]`.
+#
+# @noargs
+#
+# @exitcode 0 Success.
+# @exitcode 1 Internal error (logged as internal).
+# @exitcode 2 External error (logged as internal).
+_bl_config_touch() {
+
+    if ! [[ -n "${_BL_CONST[DIR_CONFIG]:-}" ]]; then
+        bl_log_internal "missing variable '_BL_CONST[DIR_CONFIG]'"
+        return 1
+    elif ! [[ -n "${_BL_CONST[PATH_CONFIG]:-}" ]]; then
+        bl_log_internal "missing variable '_BL_CONST[PATH_CONFIG]'"
+        return 1
+    fi
+
+    local -r DIR="${_BL_CONST[DIR_CONFIG]}"
+    local -r FILE="${_BL_CONST[PATH_CONFIG]}"
+
+    if [[ ! -f "$FILE" ]]; then
+    
+        bl_run_external mkdir -p "$DIR" || return 2
+        bl_run_external touch "$FILE" || return 2
+    fi
+}
+
 
 
 # MARK: Parse
