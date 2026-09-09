@@ -31,7 +31,7 @@
 # @exitcode 0 Success.
 # @exitcode 1 Internal error (logged as internal).
 bl_log_init() {
-
+    
     _bl_log_touch || return 1
     _bl_log_configure_color || return 1
 }
@@ -110,13 +110,26 @@ bl_log_internal() {
 # @noargs
 #
 # @exitcode 0 Success.
-# @exitcode 1 External error (logged as internal).
+# @exitcode 1 Internal error (logged as internal).
+# @exitcode 2 External error (logged as internal).
 _bl_log_touch() {
 
+    if ! [[ -n "${_BL_CONST[DIR_LOG]:-}" ]]; then
+        bl_log_internal "missing variable '_BL_CONST[DIR_LOG]'"
+        return 1
+    elif ! [[ -n "${_BL_CONST[PATH_LOG]:-}" ]]; then
+        bl_log_internal "missing variable '_BL_CONST[PATH_LOG]'"
+        return 1
+    fi
+
+    local -r DIR="${_BL_CONST[DIR_LOG]}"
     local -r FILE="${_BL_CONST[PATH_LOG]}"
 
-    bl_run_external mkdir -p "${_BL_CONST[DIR_LOG]}" || return 1
-    bl_run_external touch "$FILE" || return 1
+    if [[ ! -f "$FILE" ]]; then
+    
+        bl_run_external mkdir -p "$DIR" || return 2
+        bl_run_external touch "$FILE" || return 2
+    fi
 
     if [[ -f "$FILE" ]]; then
 
@@ -125,14 +138,14 @@ _bl_log_touch() {
 
             # Rotate log file
             local -r TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
-            local -r OLD_FILE="${_BL_CONST[DIR_LOG]}/bl-${TIMESTAMP}.log"
+            local -r OLD_FILE="$DIR/bl-${TIMESTAMP}.log"
 
-            bl_run_external mv "$FILE" "$OLD_FILE" || return 1
-            bl_run_external touch "$FILE" || return 1
+            bl_run_external mv "$FILE" "$OLD_FILE" || return 2
+            bl_run_external touch "$FILE" || return 2
 
             # Delete +30 days old files
-            bl_run_external find "${_BL_CONST[DIR_LOG]}" -name "bl-*.log" \
-                -type f -mtime +30 -delete || return 1
+            bl_run_external find "$DIR" -name "bl-*.log" \
+                -type f -mtime +30 -delete || return 2
         fi
     fi
 }
@@ -152,7 +165,8 @@ _bl_log_touch() {
 #
 # @exitcode 0 Success.
 # @exitcode 1 `_BL_CONST[PATH_LOG]` undefined or empty (logged as internal).
-# @exitcode 2 Log file does not have writing permissions (logged as internal).
+# @exitcode 2 Log file does not exist (logged as internal).
+# @exitcode 3 Log file does not have writing permissions (logged as internal).
 _bl_log_write() {
 
     local -r LEVEL="$1"
@@ -164,9 +178,12 @@ _bl_log_write() {
     if ! [[ -n "${_BL_CONST[PATH_LOG]:-}" ]]; then
         bl_log_internal "missing variable '_BL_CONST[PATH_LOG]'"
         return 1
+    elif ! [[ -f "${_BL_CONST[PATH_LOG]}" ]]; then
+        bl_log_internal "${_BL_CONST[PATH_LOG]}: no such file"
+        return 2
     elif ! [[ -w "${_BL_CONST[PATH_LOG]}" ]]; then
         bl_log_internal "permission denied '${_BL_CONST[PATH_LOG]}'"
-        return 2
+        return 3
     fi
     
     printf '[%s] [%s] [%s] %s\n' \
