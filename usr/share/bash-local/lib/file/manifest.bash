@@ -40,7 +40,7 @@
 # @exitcode 4 Reading manifest file failed.
 bl_manifest_collect_traits_by_name() {
     
-    local -r ENVIRONMENT="$1"
+    local -r ENV="$1"
     local -rn NAMES=$2
     local -n linenos_=$3
     local -n scopes_=$4
@@ -53,15 +53,15 @@ bl_manifest_collect_traits_by_name() {
     if ! [[ -n "${_BL_CONST[PATH_MANIFEST]:-}" ]]; then
         bl_log_debug "FATAL_MISSING_VARIABLE" "_BL_CONST[PATH_MANIFEST]"
         return 1
-    elif ! [[ -f "$ENVIRONMENT/${_BL_CONST[PATH_MANIFEST]}" ]]; then
-        bl_log "FATAL_NOT_FILE" "$ENVIRONMENT/${_BL_CONST[PATH_MANIFEST]}"
+    elif ! [[ -f "$ENV/${_BL_CONST[PATH_MANIFEST]}" ]]; then
+        bl_log "FATAL_NOT_FILE" "$ENV/${_BL_CONST[PATH_MANIFEST]}"
         return 2
-    elif ! [[ -r "$ENVIRONMENT/${_BL_CONST[PATH_MANIFEST]}" ]]; then
-        bl_log "FATAL_NO_PERM" "$ENVIRONMENT/${_BL_CONST[PATH_MANIFEST]}"
+    elif ! [[ -r "$ENV/${_BL_CONST[PATH_MANIFEST]}" ]]; then
+        bl_log "FATAL_NO_PERM" "$ENV/${_BL_CONST[PATH_MANIFEST]}"
         return 3
     fi
 
-    local -r MANIFEST="$ENVIRONMENT/${_BL_CONST[PATH_MANIFEST]}"
+    local -r MANIFEST="$ENV/${_BL_CONST[PATH_MANIFEST]}"
 
     local -a MANIFEST_LINES
     bl_file_read_lines "$MANIFEST" MANIFEST_LINES || return 5
@@ -116,7 +116,7 @@ bl_manifest_collect_traits_by_name() {
 # @exitcode 0 Success.
 bl_manifest_collect_names_by_scope() {
 
-    local -r ENVIRONMENT="$1"
+    local -r ENV="$1"
     local -r COLLECT_LOCAL_ELEMENTS="$2"
     local -r COLLECT_SCOPED_ELEMENTS="$3"
     local -n aliases__=$4
@@ -128,7 +128,7 @@ bl_manifest_collect_names_by_scope() {
 
     # Map manifest into MANIFEST_LINES array
     local -a MANIFEST_LINES
-    mapfile -t MANIFEST_LINES < "$ENVIRONMENT/${_BL_CONST[PATH_MANIFEST]}"
+    mapfile -t MANIFEST_LINES < "$ENV/${_BL_CONST[PATH_MANIFEST]}"
 
     local -r SCOPED_OFFSET="${MANIFEST_LINES[0]}"
 
@@ -157,10 +157,11 @@ bl_manifest_collect_names_by_scope() {
 # -----------------------------------------------------------------------------
 # @section Append elements
 
-# @description Appends elements to an environment manifest. Inserts the
+# @description Appends elements to an environment manifest. Inserts each
 # element at the end of its scope section.
 #
-# Elements given MUST be ordered by starting lines (or ending lines).
+# Elements with the same scope MUST be given ordered by starting lines (or
+# ending lines).
 #
 # If no elements given, the function is a no-op.
 #
@@ -175,30 +176,23 @@ bl_manifest_collect_names_by_scope() {
 # @arg $6 array  Constant reference to ending lines array.
 #
 # @exitcode 0 Success.
-# @exitcode 1 Arrays ($2-$6) have a different number of elements (logged in
-# debug).
-# @exitcode 2 `_BL_CONST[PATH_MANIFEST]` is not defined or is empty (logged in
-# debug).
-# @exitcode 3 Manifest file does not exist (logged).
-# @exitcode 4 Manifest file does not have reading or writing permissions
-# (logged).
-# @exitcode 5 Reading manifest file failed (logged in debug).
-# @exitcode 6 Writing in manifest file failed (logged in debug).
-bl_manifest_append_by_traits() {
+# @exitcode 1 Internal error (logged in debug).
+# @exitcode 2 User-related error (logged).
+bl_manifest_append() {
     
-    local -r ENVIRONMENT="$1"
-    local -rn NAMES=$2
-    local -rn SCOPES=$3
-    local -rn KINDS=$4
-    local -rn STARTS=$5
-    local -rn ENDS=$6
+    local -r ENV="$1"
+    local -rn NAMES_=$2
+    local -rn SCOPES_=$3
+    local -rn KINDS_=$4
+    local -rn STARTS_=$5
+    local -rn ENDS_=$6
 
-    local size=${#NAMES[@]}
+    local size=${#NAMES_[@]}
     [[ size -ne 0 ]] || return 0
 
     # shellcheck disable=SC2056
-    if (( size != ${#SCOPES[@]} || size != ${#KINDS[@]}  ||
-          size != ${#STARTS[@]} || size != ${#ENDS[@]} )); then
+    if (( size != ${#SCOPES_[@]} || size != ${#KINDS_[@]}  ||
+          size != ${#STARTS_[@]} || size != ${#ENDS_[@]} )); then
 
         bl_log_debug "FATAL_UNEVEN_ARRAYS"
         return 1
@@ -206,49 +200,56 @@ bl_manifest_append_by_traits() {
 
     if ! [[ -n "${_BL_CONST[PATH_MANIFEST]:-}" ]]; then
         bl_log_debug "FATAL_MISSING_VARIABLE" "_BL_CONST[PATH_MANIFEST]"
+        return 1
+    elif ! [[ -f "$ENV/${_BL_CONST[PATH_MANIFEST]}" ]]; then
+        bl_log "FATAL_NO_FILE" "$ENV/${_BL_CONST[PATH_MANIFEST]}"
         return 2
-    elif ! [[ -f "$ENVIRONMENT/${_BL_CONST[PATH_MANIFEST]}" ]]; then
-        bl_log "FATAL_NO_FILE" "$ENVIRONMENT/${_BL_CONST[PATH_MANIFEST]}"
-        return 3
-    elif ! [[ -r "$ENVIRONMENT/${_BL_CONST[PATH_MANIFEST]}" &&
-              -w "$ENVIRONMENT/${_BL_CONST[PATH_MANIFEST]}" ]]; then
-        bl_log "FATAL_NO_PERM" "$ENVIRONMENT/${_BL_CONST[PATH_MANIFEST]}"
-        return 4
+    elif ! [[ -r "$ENV/${_BL_CONST[PATH_MANIFEST]}" &&
+              -w "$ENV/${_BL_CONST[PATH_MANIFEST]}" ]]; then
+        bl_log "FATAL_NO_PERM" "$ENV/${_BL_CONST[PATH_MANIFEST]}"
+        return 2
     fi
 
-    local -r MANIFEST="$ENVIRONMENT/${_BL_CONST[PATH_MANIFEST]}"
+    local -r MANIFEST="$ENV/${_BL_CONST[PATH_MANIFEST]}"
 
     local -a MANIFEST_LINES
-    bl_file_read_lines "$MANIFEST" MANIFEST_LINES || return 5
+    bl_file_read_lines "$MANIFEST" MANIFEST_LINES || return
+
+    local scoped_offset="${MANIFEST_LINES[0]}"
 
     local -i i
     for (( i = 0; i < size; i++ )); do
 
-        local scoped_offset="${MANIFEST_LINES[0]}"
-
         # Turn traits into single line
         local element_line
         printf -v element_line '%s %s %s %s %s' \
-            "${NAMES[i]}" "${SCOPES[i]}" "${KINDS[i]}" "${STARTS[i]}" "${ENDS[i]}"
+            "${NAMES_[i]}" "${SCOPES_[i]}" "${KINDS_[i]}" \
+            "${STARTS_[i]}" "${ENDS_[i]}"
+        
+        case "${SCOPES_[i]}" in
 
-        if [[ "${SCOPES[i]}" == "${_BL_CONST[SCHEMA_SCOPE_LOCAL]}" ]]; then
+            "${_BL_CONST[SCHEMA_SCOPE_LOCAL]}")
 
-            # Move elements one position right
-            local -i j
-            for (( j = ${#MANIFEST_LINES[@]}; j > scoped_offset; j-- )); do
-                MANIFEST_LINES[j]="${MANIFEST_LINES[j-1]}"
-            done
+                # Move elements one position right
+                local -i j
+                for (( j = ${#MANIFEST_LINES[@]}; j > scoped_offset; j-- )); do
+                    MANIFEST_LINES[j]="${MANIFEST_LINES[j-1]}"
+                done
 
-            # Insert element
-            MANIFEST_LINES[scoped_offset]="$element_line"
-            MANIFEST_LINES[0]="$(( scoped_offset+1 ))"
+                # Insert element
+                MANIFEST_LINES[scoped_offset]="$element_line"
+                scoped_offset="$(( scoped_offset+1 ))"
+                ;;
 
-        elif [[ "${SCOPES[i]}" == "${_BL_CONST[SCHEMA_SCOPE_SCOPED]}" ]]; then
-            MANIFEST_LINES+=("$element_line")
-        fi
+            "${_BL_CONST[SCHEMA_SCOPE_SCOPED]}")
+
+                MANIFEST_LINES+=("$element_line")
+                ;;
+        esac
     done
+    MANIFEST_LINES[0]="$scoped_offset"
     
-    bl_file_write_atomic MANIFEST_LINES "$MANIFEST" || return 6
+    bl_file_write_atomic "$MANIFEST" MANIFEST_LINES || return
 }
 
 
@@ -276,7 +277,7 @@ bl_manifest_append_by_traits() {
 # @exitcode 5 Writing in manifest file failed (logged in debug).
 bl_manifest_remove_by_lineno() {
     
-    local -r ENVIRONMENT="$1"
+    local -r ENV="$1"
     local -rn LINENOS=$2
 
     [[ "${#LINENOS[@]}" -ne 0 ]] || return 0
@@ -284,15 +285,15 @@ bl_manifest_remove_by_lineno() {
     if ! [[ -n "${_BL_CONST[PATH_MANIFEST]:-}" ]]; then
         bl_log_debug "FATAL_MISSING_VARIABLE" "_BL_CONST[PATH_MANIFEST]"
         return 1
-    elif ! [[ -f "$ENVIRONMENT/${_BL_CONST[PATH_MANIFEST]}" ]]; then
-        bl_log "FATAL_NO_FILE" "$ENVIRONMENT/${_BL_CONST[PATH_MANIFEST]}"
+    elif ! [[ -f "$ENV/${_BL_CONST[PATH_MANIFEST]}" ]]; then
+        bl_log "FATAL_NO_FILE" "$ENV/${_BL_CONST[PATH_MANIFEST]}"
         return 2
-    elif ! [[ -r "$ENVIRONMENT/${_BL_CONST[PATH_MANIFEST]}" ]]; then
-        bl_log "FATAL_NO_PERM" "$ENVIRONMENT/${_BL_CONST[PATH_MANIFEST]}"
+    elif ! [[ -r "$ENV/${_BL_CONST[PATH_MANIFEST]}" ]]; then
+        bl_log "FATAL_NO_PERM" "$ENV/${_BL_CONST[PATH_MANIFEST]}"
         return 3
     fi
 
-    local -r MANIFEST="$ENVIRONMENT/${_BL_CONST[PATH_MANIFEST]}"
+    local -r MANIFEST="$ENV/${_BL_CONST[PATH_MANIFEST]}"
 
     local -a MANIFEST_LINES
     bl_file_read_lines "$MANIFEST" MANIFEST_LINES || return 4

@@ -6,91 +6,135 @@
 # @description Implements functions responsible for accessing source files.
 # They collect, append and remove rows from/to the files.
 
-# MARK: Append
+# MARK: Public
 # -----------------------------------------------------------------------------
-# @section Append elements
+# @section Public functions
+#
+# @description Functions in this sections are intended to be called by other
+# modules.
 
-# @description Appends elements to a source file. Inserts the element at the end
-# of the file.
+# @description Appends elements to source files. Inserts each element at the end
+# of its corresponding file.
 #
 # Starting and ending lines will be ordered by element position in arrays.
 #
 # If no elements given, the function is a no-op.
 #
 # Side effects:
-# - Reads and writes source file.
+# - Reads and writes source files.
 #
 # @arg $1 string Environment path (without trailing '/').
-# @arg $2 string  Scope.
-# @arg $3 array  Constant reference to kinds array.
-# @arg $4 array  Constant reference to names array.
-# @arg $5 array  Constant reference to sources array.
-# @arg $6 array  Reference to starting lines array.
-# @arg $7 array  Constant reference to ending lines array.
+# @arg $2 array Constant reference to names array.
+# @arg $3 array Constant reference to scopes array.
+# @arg $4 array Constant reference to kinds array.
+# @arg $5 array Constant reference to sources array.
+# @arg $6 array Reference to starting lines array.
+# @arg $7 array Reference to ending lines array.
 #
 # @exitcode 0 Success.
-# @exitcode 1 Arrays ($3-$5) have a different number of elements (logged in
-# debug).
-# @exitcode 2 `_BL_CONST["PATH_SOURCE_$SCOPE"]` is not defined or is empty
-# (logged in debug).
-# @exitcode 3 Source file does not exist (logged).
-# @exitcode 4 Source file does not have reading or writing permissions (logged).
-# @exitcode 5 Reading failed (logged in debug).
-# @exitcode 6 Building definition failed (logged in debug).
-# @exitcode 7 Writing failed (logged in debug).
-bl_source_append_by_scope() {
+# @exitcode 1 Internal error (logged in debug).
+# @exitcode 2 User-related error (logged).
+bl_source_append() {
     
-    local -r ENVIRONMENT="$1"
-    local -r SCOPE="$2"
-    local -rn KINDS=$3
-    local -rn NAMES=$4
-    local -rn SOURCES=$5
+    local -r ENV="$1"
+    local -rn NAMES_=$2
+    local -rn SCOPES_=$3
+    local -rn KINDS_=$4
+    local -rn SOURCES_=$5
     local -n starts_=$6
     local -n ends_=$7
 
-    local size=${#NAMES[@]}
+    local size=${#NAMES_[@]}
     [[ size -ne 0 ]] || return 0
 
     # shellcheck disable=SC2056
-    if (( size != ${#KINDS[@]} || size != ${#SOURCES[@]} )); then
+    if (( size != ${#SCOPES_[@]} || size != ${#KINDS_[@]} || 
+          size != ${#SOURCES_[@]} )); then
 
         bl_log_debug "FATAL_UNEVEN_ARRAYS"
         return 1
     fi
     
-    if ! [[ -n "${_BL_CONST["PATH_SOURCE_$SCOPE"]:-}" ]]; then
-        bl_log_debug "FATAL_MISSING_VARIABLE" "_BL_CONST[PATH_SOURCE_$SCOPE]"
+    if ! [[ -n "${_BL_CONST[PATH_SOURCE_LOCAL]:-}" ]]; then
+        bl_log_debug "FATAL_MISSING_VARIABLE" "_BL_CONST[PATH_SOURCE_LOCAL]"
+        return 1
+    elif ! [[ -n "${_BL_CONST[PATH_SOURCE_SCOPED]:-}" ]]; then
+        bl_log_debug "FATAL_MISSING_VARIABLE" "_BL_CONST[PATH_SOURCE_SCOPED]"
+        return 1
+    elif ! [[ -f "$ENV/${_BL_CONST[PATH_SOURCE_LOCAL]}" ]]; then
+        bl_log "FATAL_NO_FILE" "$ENV/${_BL_CONST[PATH_SOURCE_LOCAL]}"
         return 2
-    elif ! [[ -f "$ENVIRONMENT/${_BL_CONST["PATH_SOURCE_$SCOPE"]}" ]]; then
-        bl_log "FATAL_NO_FILE" "$ENVIRONMENT/${_BL_CONST[PATH_SOURCE_$SCOPE]}"
-        return 3
-    elif ! [[ -r "$ENVIRONMENT/${_BL_CONST["PATH_SOURCE_$SCOPE"]}" &&
-              -w "$ENVIRONMENT/${_BL_CONST["PATH_SOURCE_$SCOPE"]}" ]]; then
-        bl_log "FATAL_NO_PERM" "$ENVIRONMENT/${_BL_CONST["PATH_SOURCE_$SCOPE"]}"
-        return 4
+    elif ! [[ -f "$ENV/${_BL_CONST[PATH_SOURCE_SCOPED]}" ]]; then
+        bl_log "FATAL_NO_FILE" "$ENV/${_BL_CONST[PATH_SOURCE_SCOPED]}"
+        return 2
+    elif ! [[ -r "$ENV/${_BL_CONST[PATH_SOURCE_LOCAL]}" &&
+              -w "$ENV/${_BL_CONST[PATH_SOURCE_LOCAL]}" ]]; then
+        bl_log "FATAL_NO_PERM" "$ENV/${_BL_CONST[PATH_SOURCE_LOCAL]}"
+        return 2
+    elif ! [[ -r "$ENV/${_BL_CONST[PATH_SOURCE_SCOPED]}" &&
+              -w "$ENV/${_BL_CONST[PATH_SOURCE_SCOPED]}" ]]; then
+        bl_log "FATAL_NO_PERM" "$ENV/${_BL_CONST[PATH_SOURCE_SCOPED]}"
+        return 2
     fi
     
-    local -r SOURCE_FILE="$ENVIRONMENT/${_BL_CONST["PATH_SOURCE_$SCOPE"]}"
+    local -r LOCAL_FILE="$ENV/${_BL_CONST[PATH_SOURCE_LOCAL]}"
+    local -r SCOPED_FILE="$ENV/${_BL_CONST[PATH_SOURCE_SCOPED]}"
 
-    local -a LINES
-    bl_file_read_lines "$SOURCE_FILE" LINES || return 5
+    local -a LOCAL_LINES SCOPED_LINES
+    bl_file_read_lines "$LOCAL_FILE" LOCAL_LINES || return
+    bl_file_read_lines "$SCOPED_FILE" SCOPED_LINES || return
 
     local -i i
     for (( i = 0; i < size; i++ )); do
 
         local -a definition
         _bl_source_build_definition \
-            "${KINDS[i]}" "${NAMES[i]}" "${SOURCES[i]}" definition || return 6
+            "${KINDS_[i]}" "${NAMES_[i]}" "${SOURCES_[i]}" definition || return
 
-        starts_[i]=${#LINES[@]}
-        LINES+=("${definition[@]}")
-        ends_[i]=$(( ${#LINES[@]} - 1 ))
+        case "${SCOPES_[i]}" in
+
+            "${_BL_CONST[SCHEMA_SCOPE_LOCAL]}")
+                
+                starts_[i]=${#LOCAL_LINES[@]}
+                LOCAL_LINES+=("${definition[@]}")
+                ends_[i]=$(( ${#LOCAL_LINES[@]} - 1 ))
+                ;;
+
+            "${_BL_CONST[SCHEMA_SCOPE_SCOPED]}")
+                
+                starts_[i]=${#SCOPED_LINES[@]}
+                SCOPED_LINES+=("${definition[@]}")
+                ends_[i]=$(( ${#SCOPED_LINES[@]} - 1 ))
+                ;;
+        esac
     done
-    
-    bl_file_write_atomic LINES "$SOURCE_FILE" || return 7
+
+    bl_file_write_atomic "$LOCAL_FILE" LOCAL_LINES || return
+    bl_file_write_atomic "$SCOPED_FILE" SCOPED_LINES || return
 }
 
-# Comment
+# @description Builds the definition for the given element. Resulting Format
+# depends on element type:
+# - Alias: alias <name>='<definition>'
+# - Function:
+# <name> () {
+#   <definition>
+# }
+# - Variable: <name>='<definition>'
+#
+# Note that <definition> preserves newline characters as '\n' escape sequences,
+# as provided by the user.
+#
+# Definition is an array where each element represents one line of the element's
+# definition.
+#
+# @arg $1 string Kind (as defined in '_BL_CONST').
+# @arg $2 string Name.
+# @arg $3 string Source.
+# @arg $4 array Reference to definition array.
+#
+# @exitcode 0 Success.
+# @exitcode 1 Internal error (logged in debug).
 _bl_source_build_definition() {
 
     local -r KIND="$1"
@@ -110,6 +154,7 @@ _bl_source_build_definition() {
     fi
     
     case "$KIND" in
+
         "${_BL_CONST[SCHEMA_KIND_ALIAS]}")
 
             if ! mapfile -t definition_ <<< "$SOURCE"; then

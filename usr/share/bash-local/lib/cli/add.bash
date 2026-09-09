@@ -78,7 +78,7 @@ bl_add_main() {
     bl_cli_resolve ATOMIC atomic || return
 
     local force
-    bl_cli_resolve FORCE force || return
+    bl_cli_resolve FORCE force || return # ToDo
 
     local -a scopes kinds names source_types sources
 
@@ -101,7 +101,8 @@ bl_add_main() {
     [[ $stdin_used == false && -n "$STDIN" ]] && bl_log "WARN_IGNORING_STDIN"
 
     _bl_add_resolve_editor "$EDITOR" scopes kinds names source_types sources || return
-    # _bl_add_elements "$ENV" scopes kinds names sources || return
+    _bl_add_elements "$ENV" scopes kinds names sources || return
+    bl_core_update
     _bl_add_summarize "${#names[@]}" "${#ARGUMENTS[@]}" || return
 }
 
@@ -730,7 +731,7 @@ _bl_add_report_errors() {
     local -rn SECONDS=$4
 
     local error message output i
-    for (( i=0; i<${#ERRORS[@]}; i++ )); do
+    for (( i = 0; i < ${#ERRORS[@]}; i++ )); do
 
         _bl_log_translate "${ERRORS[i]}" message "${FIRSTS[i]}" "${SECONDS[i]}"
         output+="$message"$'\n'""
@@ -951,7 +952,7 @@ _bl_add_filter_editor_elements() {
 
     local -a aux_scopes aux_kinds aux_names aux_source_types aux_sources
     local -i i
-    for (( i=0; i<${#names_[@]}; i++ )); do
+    for (( i = 0; i < ${#names_[@]}; i++ )); do
 
         if [[ ${source_types_[i]} == "${_BL_CONST[ADD_SOURCE_TYPE_EDITOR]}" ]]; then
             
@@ -1051,7 +1052,7 @@ _bl_add_build_editor_template() {
     local end="${_BL_CONST[ADD_EDITOR_TEMPLATE_PROMPT_END]}"
 
     local -i i
-    for (( i=0; i<${#NAMES_[@]}; i++ )); do
+    for (( i = 0; i < ${#NAMES_[@]}; i++ )); do
         template_+=$'\n\n'"${KINDS_[i]}:${NAMES_[i]} $begin"$'\n\n'"$end"
     done
 }
@@ -1110,8 +1111,20 @@ _bl_add_get_editor_args() {
 # -----------------------------------------------------------------------------
 # @section Add elements into environment
 #
-# Functions in this section add the elements into source files and manifest.
+# Functions in this section add the elements into manifest and source files.
 
+# @description Add elements to an environment by writing into manifest and
+# source files.
+#
+# @arg $1 string Environment.
+# @arg $2 array Constant reference to scopes array.
+# @arg $3 array Constant reference to kinds array.
+# @arg $4 array Constant reference to names array.
+# @arg $5 array Constant reference to sources array.
+#
+# @exitcode 0 Success.
+# @exitcode 1 Internal error (logged in debug).
+# @exitcode 2 User-related error (logged).
 _bl_add_elements() {
 
     local -r ENV="$1"
@@ -1126,11 +1139,15 @@ _bl_add_elements() {
     # shellcheck disable=SC2056
     if (( size != ${#SCOPES[@]} || size != ${#KINDS[@]} ||
           size != ${#SOURCES[@]} )); then
+
         bl_log_debug "FATAL_UNEVEN_ARRAYS"
         return 1
     fi
 
+    local -a starts ends
 
+    bl_source_append "$ENV" NAMES SCOPES KINDS SOURCES starts ends || return
+    bl_manifest_append "$ENV" NAMES SCOPES KINDS starts ends || return
 }
 
 
