@@ -155,7 +155,7 @@ bl-init() {
         bl_log "USAGE_MANY_ARGS"
         return 1
     fi
-    _bl_assert_valid_dir "${_BL_CONST[INIT_COMMAND]}" "$ENVIRONMENT" || return 1
+    #_bl_assert_valid_dir "${_BL_CONST[INIT_COMMAND]}" "$ENVIRONMENT" || return 1
 
     # Initialize environment
     # _bl_cli_init "$ENVIRONMENT" && bl_log "INFO_INIT" "$BL_PATH" || return $?
@@ -199,11 +199,14 @@ bl-add() {
     #           local:alias:deploy="git push" \
     #           scoped:var:SECRET_KEY=xyz \
     #           func:foo="echo 'Hello World'"
-    _bl_cli_trap_return
+    local old_trap
+    old_trap=$(trap -p RETURN)
+    trap _bl_cli_cleanup_return RETURN
 
     local stdin=""
     [[ ! -t 0 ]] && stdin=$(cat)
 
+    # shellcheck disable=SC2034
     local arguments env
     bl_parse_arguments arguments "$@" || return
     bl_add_take_in env
@@ -283,14 +286,6 @@ bl-show() {
 # MARK: Auxiliar
 # -----------------------------------------------------------------------------
 # @section Auxiliar functions
-
-_bl_cli_trap_return() {
-
-    local old_trap
-    old_trap=$(trap -p RETURN)
-
-    trap _bl_cli_cleanup_return RETURN
-}
 
 _bl_cli_cleanup_return() {
 
