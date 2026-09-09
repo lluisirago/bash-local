@@ -38,17 +38,31 @@
 # - `_BL_STATE[PPD]`:
 #     Previous working directory.
 
-# MARK: Hook
+# MARK: Public
 # -----------------------------------------------------------------------------
-# @section Environment synchronization for `cd` hook
+# @section Public functions
+#
+# @description Functions in this section are intended to be called by other
+# modules.
 
-# @description Redefinition of `cd` function. Same arguments as default `cd`.
+
 cd() {
     
     _BL_STATE[PPD]="$PWD"
     builtin cd "$@" || return
-    _bl_core_sync
+    bl_core_sync
     return 0
+}
+
+# @description Updates shell state with new changes.
+#
+# It is intended to be invoked after a change.
+#
+# @noargs
+bl_core_update() {
+
+    _BL_STATE_CURRENT_ENVIRONMENTS=()
+    bl_core_sync
 }
 
 # @description Synchronizes shell state with the current working directory.
@@ -62,7 +76,7 @@ cd() {
 #
 # @noargs
 # @see Used in [cd](#cd)
-_bl_core_sync() {
+bl_core_sync() {
 
     _bl_core_refresh_environments_state
     _bl_core_prune_environments
@@ -113,7 +127,7 @@ _bl_core_refresh_current_environments_state() {
 
     _BL_STATE_CURRENT_ENVIRONMENTS=()
     [[ $PWD == "$HOME"* ]] || return 0
-
+    
     local dir=$PWD
     while [[ $dir != "$HOME" ]]; do
 
@@ -124,6 +138,10 @@ _bl_core_refresh_current_environments_state() {
         fi
         dir=${dir%/*}
     done
+
+    if [[ -d "$dir/${_BL_CONST[DIR_BL]}" ]]; then
+        _BL_STATE_CURRENT_ENVIRONMENTS+=("$dir")
+    fi
 }
 
 
