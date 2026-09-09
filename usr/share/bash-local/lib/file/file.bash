@@ -44,12 +44,24 @@ bl_file_write_atomic() {
 
     local -r FILE="$1"
     local -rn SOURCE=$2
-    
     local -r DIR=${FILE%/*}
     
     local tmp
     bl_file_create_tmp "$DIR" tmp || return
-    _bl_file_trap_return "$tmp" || return
+    
+    # shellcheck disable=SC2329
+    cleanup_return() {
+        local status=$?
+        rm -f -- "$tmp"
+        trap - RETURN
+        [[ -n ${old_trap_:-} ]] && eval "$old_trap_"
+        return "$status"
+    }
+    
+    local old_trap_
+    old_trap_=$(trap -p RETURN)
+    trap cleanup_return RETURN
+
     bl_file_write "$tmp" SOURCE || return
     bl_run_external mv -f -- "$tmp" "$FILE" || return
 }
@@ -84,53 +96,27 @@ bl_file_create_tmp() {
 bl_file_write() {
 
     local -r FILE="$1"
-    local -rn SOURCE=$2
+    local -rn SOURCE_=$2
     
-    if [[ $(declare -p "$2" 2>/dev/null) =~ ^declare\ -[^[:space:]]*[aA] ]]; then
-        if ! printf '%s\n' "${SOURCE[@]}" > "$FILE"; then
+    if [[ $(declare -p "${!SOURCE_}" 2>/dev/null) =~ ^declare\ -[^[:space:]]*[aA] ]]; then
+        
+        [[ ${#SOURCE_[@]} -eq 0 ]] && return 0
+
+        if ! printf '%s\n' "${SOURCE_[@]}" > "$FILE"; then
             bl_log_debug "FATAL_WRITE" "$FILE"
             return 1
         fi
     else
-        if ! printf '%s\n' "$SOURCE" > "$FILE"; then
+
+        [[ -z "$SOURCE_" ]] && return 0
+
+        if ! printf '%s\n' "$SOURCE_" > "$FILE"; then
             bl_log_debug "FATAL_WRITE" "$FILE"
             return 1
         fi
     fi
 }
 
-
-# MARK: Private
-# -----------------------------------------------------------------------------
-# @section Private funtions
-#
-# Functions in this section are not intended to be called by other modules.
-
-# @description Traps RETURN signal removing temporal file used for atomic write.
-#
-# @arg $1 string Temporal file path.
-#
-# @exitcode Return value trapped.
-_bl_file_trap_return() {
-
-    local -r TMP="$1"
-
-    local old_trap_
-    old_trap_=$(trap -p RETURN)
-    
-    # shellcheck disable=SC2329
-    cleanup_return() {
-
-        local status=$?
-
-        bl_run_external rm -f -- "$TMP"
-        trap - RETURN
-        [[ -n "${old_trap_:-}" ]] && eval "$old_trap_"
-
-        return "$status"
-    }
-    trap cleanup_return RETURN
-}
 
 # MARK: Modules
 # -----------------------------------------------------------------------------

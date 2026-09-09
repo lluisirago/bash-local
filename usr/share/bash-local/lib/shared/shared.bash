@@ -153,7 +153,6 @@ _BL_CONST[PATH_SOURCE_SCOPED]="${_BL_CONST[DIR_SOURCE]}${_BL_CONST[FILENAME_SOUR
 
 readonly -A _BL_CONST
 
-
 # @description Dynamic state of bash-local.
 #
 # Defines variables containing information needed between bash-local
