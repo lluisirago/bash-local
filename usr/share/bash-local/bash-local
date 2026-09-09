@@ -22,5 +22,6 @@ bl_start() {
 
     bl_config_load || return 1
     bl_log_init || return 1
+    bl_core_sync
 }
 bl_start
